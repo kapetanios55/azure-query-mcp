@@ -36,4 +36,18 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm run check
       - run: npm audit --omit=dev --audit-level=high
-      - run: npm publish --provenance --access public
+      # Tagging a version that was already published (for example the first release,
+      # which had to be published manually) skips the upload instead of failing.
+      - name: Check whether this version is already on npm
+        id: published
+        run: |
+          name="$(node -p "require('./package.json').name")"
+          version="$(node -p "require('./package.json').version")"
+          if npm view "${name}@${version}" version >/dev/null 2>&1; then
+            echo "already=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::${name}@${version} is already published; skipping npm publish."
+          else
+            echo "already=false" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.published.outputs.already != 'true'
+        run: npm publish --provenance --access public
