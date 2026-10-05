@@ -14,6 +14,12 @@ test("rejects Log Analytics table queries", () => {
   );
 });
 
+test("accepts keywords inside string literals and leading comments", () => {
+  assert.doesNotThrow(() =>
+    validateResourceGraphQuery("// resources pending deletion\nResources | where tags['lifecycle'] == 'delete' | limit 10"),
+  );
+});
+
 test("rejects management commands and external data", () => {
   assert.throws(() => validateResourceGraphQuery(".show tables"), /supported ARG table/);
   assert.throws(

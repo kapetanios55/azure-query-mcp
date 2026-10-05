@@ -1,6 +1,8 @@
+import { stripLiteralsAndComments } from "./kql-lexer.js";
+
 const managementCommands = /^\s*\./m;
 const disallowedOperators = /\b(?:evaluate|externaldata|external_data|ingest|set|append|drop|delete|purge)\b/i;
-const allowedTables = /^(?:resources|resourcecontainers|advisorresources|authorizationresources|chaosresources|desktopvirtualizationresources|extendedlocationresources|guestconfigurationresources|healthresources|iotsecurityresources|kubernetesconfigurationresources|maintenanceresources|networkresources|patchassessmentresources|patchinstallationresources|policyresources|recoveryservicesresources|securityresources|servicehealthresources|servicehealthresources|spotresources)\b/i;
+const allowedTables = /^(?:resources|resourcecontainers|advisorresources|authorizationresources|chaosresources|desktopvirtualizationresources|extendedlocationresources|guestconfigurationresources|healthresources|iotsecurityresources|kubernetesconfigurationresources|maintenanceresources|networkresources|patchassessmentresources|patchinstallationresources|policyresources|recoveryservicesresources|securityresources|servicehealthresources|spotresources)\b/i;
 
 export function validateResourceGraphQuery(query: string): void {
   const trimmedQuery = query.trim();
@@ -13,11 +15,14 @@ export function validateResourceGraphQuery(query: string): void {
     throw new Error("Azure Resource Graph query exceeds the 5000 character limit.");
   }
 
-  if (!allowedTables.test(trimmedQuery)) {
+  // Keywords inside string literals or comments are data, not operators.
+  const code = stripLiteralsAndComments(trimmedQuery).trim();
+
+  if (!allowedTables.test(code)) {
     throw new Error("Azure Resource Graph query must start with a supported ARG table.");
   }
 
-  if (managementCommands.test(trimmedQuery) || disallowedOperators.test(trimmedQuery)) {
+  if (managementCommands.test(code) || disallowedOperators.test(code)) {
     throw new Error("Only read-only Azure Resource Graph queries are supported.");
   }
 }

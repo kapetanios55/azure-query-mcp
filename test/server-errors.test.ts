@@ -10,6 +10,15 @@ test("preserves safe validation errors", () => {
   );
 });
 
+test("preserves query policy errors so the client can correct the query", () => {
+  for (const message of [
+    "The evaluate plugin 'python' is not allowed. Allowed plugins: autocluster, bag_unpack.",
+    "KQL query contains an unterminated string literal.",
+  ]) {
+    assert.equal(safeErrorMessage(new Error(message)), message);
+  }
+});
+
 test("redacts unexpected upstream error details", () => {
   assert.equal(
     safeErrorMessage(new Error("Token issuer contains tenant 11111111-1111-1111-1111-111111111111")),
