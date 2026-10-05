@@ -57,7 +57,7 @@
   "devDependencies": {
     "@modelcontextprotocol/client": "^2.0.0",
     "@types/node": "^26.4.1",
-    "tsx": "^4.0.0",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.0"
   }
 }
