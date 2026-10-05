@@ -5,7 +5,7 @@
 [![CodeQL](https://github.com/kapetanios55/azure-query-mcp/actions/workflows/codeql.yml/badge.svg)](https://github.com/kapetanios55/azure-query-mcp/actions/workflows/codeql.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-A read-only Model Context Protocol server for querying Azure Log Analytics and Azure Resource Graph (ARG). It runs locally over stdio and uses Azure RBAC through `DefaultAzureCredential`.
+A read-only Model Context Protocol server for querying Azure Log Analytics, Microsoft Sentinel and Azure Resource Graph (ARG), with purpose-built SOC tools for incident triage, entity investigation, ingestion health and threat hunting. It runs locally over stdio and uses Azure RBAC through `DefaultAzureCredential`.
 
 ## What users should install
 
@@ -23,6 +23,10 @@ Use it when an MCP client needs both of these Azure data planes:
 | Logs, events, telemetry, metrics, incidents, or time-series analysis | `query_workspace` | Log Analytics workspace |
 | Azure resource inventory, configuration, tags, policy, health, or cross-subscription discovery | `query_azure_resources` | Azure Resource Graph |
 | Find a workspace or inspect its tables and schemas | `list_workspaces`, `search_tables`, `describe_table` | Azure Resource Manager |
+| Find and triage Microsoft Sentinel incidents | `list_incidents`, `get_incident` | `SecurityIncident`, `SecurityAlert` |
+| Everything one account, IP or host did across log sources | `entity_timeline` | Sign-in, audit, Office, endpoint, firewall and alert tables |
+| Is security data still arriving? Stale tables, volume drops, latency | `check_ingestion_health` | `Usage` plus a one-hour latency sample |
+| Run curated threat hunts | `list_hunting_queries`, `run_hunting_query` | Built-in library plus your own JSON hunts |
 
 ARG describes Azure control-plane resources and can be slightly delayed. It does not contain workspace log records. Log Analytics queries require a workspace customer ID and an ISO 8601 timespan.
 
@@ -53,7 +57,7 @@ Recommended least-privilege roles:
 | Capability | Suggested role and scope |
 | --- | --- |
 | Query ARG and discover workspaces | `Reader` on the required subscription or narrower resource scope |
-| Read Log Analytics schemas and data | `Log Analytics Reader` on each required workspace |
+| Read Log Analytics schemas and data, and use the SOC tools | `Log Analytics Reader` on each required workspace |
 
 Custom roles can be narrower. The effective permissions must include the relevant Azure Resource Manager read operations and Log Analytics query access.
 
@@ -144,6 +148,42 @@ npm run check
   "args": ["/absolute/path/to/azure-query-mcp/dist/index.js"]
 }
 ```
+
+## SOC tools
+
+These tools generate their own KQL, so the client does not need to know table schemas. Every generated query goes through the same read-only policy as `query_workspace`, results are capped at 1,000 rows, and all of them need only `Log Analytics Reader`. Incidents are read from the `SecurityIncident` and `SecurityAlert` tables, so Microsoft Sentinel must be enabled on the workspace for `list_incidents` and `get_incident`.
+
+| Tool | What it returns |
+| --- | --- |
+| `list_incidents` | Latest state of each incident, newest first, filterable by status and severity. |
+| `get_incident` | One incident with its alerts and the account, IP and host entities involved (`pivotEntities`), ready to pass to `entity_timeline`. |
+| `entity_timeline` | A cross-source timeline for a UPN, IP or host, plus complete per-source event counts. Tables that are not ingested are skipped with `union isfuzzy=true`. |
+| `check_ingestion_health` | Per-table last-seen time, last-24-hour volume versus the previous daily average, `Stale` / `VolumeDrop` / `VolumeSpike` status, and P50/P95 ingestion latency over the last hour. |
+| `list_hunting_queries` / `run_hunting_query` | Built-in hunts (password spray, MFA fatigue, privileged role assignment, inbox forwarding rules, Office apps spawning shells) mapped to MITRE ATT&CK. |
+
+Entity values are validated against strict UPN, IP and hostname formats before they are placed in a query, because the Log Analytics API has no parameter binding. Values containing quotes, backslashes or whitespace are rejected.
+
+### Your own hunting queries
+
+Set `AZURE_QUERY_MCP_HUNTING_DIR` to a folder of JSON hunting queries in the [SentinelCBContent](https://github.com/kapetanios55/SentinelCBContent) format (`id`, `name`, `description`, `tactics`, `techniques`, `query`). Each file must pass the read-only policy; files that do not are reported by `list_hunting_queries` and not loaded.
+
+```json
+"env": {
+  "AZURE_TENANT_ID": "<tenant-id>",
+  "AZURE_QUERY_MCP_HUNTING_DIR": "/path/to/SentinelCBContent/Hunting"
+}
+```
+
+### Prompts
+
+| Prompt | Workflow |
+| --- | --- |
+| `triage_incident` | `get_incident`, then `entity_timeline` for the key entities, then a verdict with evidence and next steps. |
+| `ingestion_health_review` | `check_ingestion_health`, likely causes for each problem, and which detections would go blind. |
+
+### Query correctness
+
+The test suite parses and semantically analyses every built-in query with Microsoft's Kusto language service against a snapshot of the official Azure Monitor table schemas (`test/fixtures/table-schemas.json`, refreshed with `node scripts/update-table-schemas.mjs`). An unknown table, column or function fails CI.
 
 ## Tools
 
