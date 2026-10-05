@@ -89,4 +89,6 @@ test("ingestion queries pass the read-only policy", () => {
   assert.match(volume, /HoursSinceLastSeen > 12, "Stale"/);
   assert.doesNotThrow(() => validateQuery(volume));
   assert.doesNotThrow(() => validateQuery(ingestionLatencyQuery()));
+  // Regression: a workspace table with its own TableName column broke withsource=TableName.
+  assert.doesNotMatch(ingestionLatencyQuery(), /withsource=TableName/);
 });

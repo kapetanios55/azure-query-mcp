@@ -361,6 +361,14 @@ npm run check
 npm audit --omit=dev
 ```
 
+### Live smoke test
+
+With `az login` done and the server built, exercise every tool against a real workspace. Output contains only counts, statuses and timings.
+
+```bash
+node scripts/live-smoke-test.mjs . <subscription-id> <workspace-resource-id> <workspace-customer-id>
+```
+
 ### Releasing
 
 1. Bump `version` in `package.json` (for example `npm version minor --no-git-tag-version`) and update [CHANGELOG.md](CHANGELOG.md).

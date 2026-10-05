@@ -9,6 +9,7 @@ import {
   ingestionLatencyQuery,
   ingestionVolumeQuery,
   listIncidentsQuery,
+  validateEntity,
   type EntityType,
   type IncidentFilters,
 } from "./soc-queries.js";
@@ -32,17 +33,59 @@ export interface PivotEntity {
   value: string;
 }
 
+export interface UnresolvedEntity {
+  type: EntityType;
+  reason: string;
+  label?: string;
+}
+
+const text = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : undefined);
+
+function isValidEntity(type: EntityType, value: string | undefined): value is string {
+  if (!value) {
+    return false;
+  }
+  try {
+    validateEntity(type, value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Best pivotable identifier for an account entity, from most to least specific. */
+function accountCandidates(entity: Row): Array<string | undefined> {
+  const name = text(entity.Name);
+  const suffix = text(entity.UPNSuffix);
+  return [text(entity.UserPrincipalName), name && suffix ? `${name}@${suffix}` : undefined, text(entity.AccountName), name];
+}
+
+function hostCandidates(entity: Row): Array<string | undefined> {
+  const hostName = text(entity.HostName);
+  const domain = text(entity.DnsDomain);
+  return [text(entity.FQDN), hostName && domain ? `${hostName}.${domain}` : undefined, hostName];
+}
+
+function unresolvedReason(type: EntityType, entity: Row): UnresolvedEntity {
+  if (type === "account") {
+    const label = text(entity.DisplayName) ?? text(entity.Name);
+    const reason = label
+      ? "only a display name is recorded, not a UPN or account name"
+      : entity.AadUserId ? "only an Entra object ID is recorded" : entity.Sid ? "only a SID is recorded" : "no usable identifier";
+    return label ? { type, reason, label } : { type, reason };
+  }
+  return { type, reason: "no valid address or hostname recorded" };
+}
+
 /**
- * Pulls account, IP and host entities out of SecurityAlert.Entities JSON so the client
- * can pivot straight into entity_timeline.
+ * Pulls account, IP and host entities out of SecurityAlert.Entities JSON. Entities with
+ * an identifier entity_timeline accepts become pivots; the rest are reported with the
+ * reason they cannot be pivoted on (real alerts often carry only a SID, an Entra object
+ * ID or a display name).
  */
-export function extractPivotEntities(alerts: Row[]): PivotEntity[] {
-  const seen = new Map<string, PivotEntity>();
-  const add = (type: EntityType, value: unknown) => {
-    if (typeof value === "string" && value.trim()) {
-      seen.set(`${type}:${value.toLowerCase()}`, { type, value: value.trim() });
-    }
-  };
+export function extractPivotEntities(alerts: Row[]): { pivots: PivotEntity[]; unresolved: UnresolvedEntity[] } {
+  const pivots = new Map<string, PivotEntity>();
+  const unresolved = new Map<string, UnresolvedEntity>();
 
   for (const alert of alerts) {
     let entities: unknown;
@@ -56,16 +99,21 @@ export function extractPivotEntities(alerts: Row[]): PivotEntity[] {
     }
     for (const entity of entities as Row[]) {
       const kind = String(entity.Type ?? "").toLowerCase();
-      if (kind === "account") {
-        add("account", entity.UPNSuffix && entity.Name ? `${String(entity.Name)}@${String(entity.UPNSuffix)}` : entity.Name);
-      } else if (kind === "ip") {
-        add("ip", entity.Address);
-      } else if (kind === "host") {
-        add("host", entity.FQDN ?? (entity.DnsDomain && entity.HostName ? `${String(entity.HostName)}.${String(entity.DnsDomain)}` : entity.HostName));
+      const type: EntityType | undefined = kind === "account" ? "account" : kind === "ip" ? "ip" : kind === "host" ? "host" : undefined;
+      if (!type) {
+        continue;
+      }
+      const candidates = type === "account" ? accountCandidates(entity) : type === "host" ? hostCandidates(entity) : [text(entity.Address)];
+      const value = candidates.find((candidate) => isValidEntity(type, candidate));
+      if (value) {
+        pivots.set(`${type}:${value.toLowerCase()}`, { type, value });
+      } else {
+        const entry = unresolvedReason(type, entity);
+        unresolved.set(`${type}:${entry.reason}:${entry.label ?? ""}`, entry);
       }
     }
   }
-  return [...seen.values()];
+  return { pivots: [...pivots.values()], unresolved: [...unresolved.values()] };
 }
 
 export class SocService {
@@ -92,10 +140,12 @@ export class SocService {
     if (!detail.rows[0]) {
       throw new Error(`KQL query found no incident ${incidentNumber} in the selected timespan. Widen the timespan or check the number.`);
     }
+    const { pivots, unresolved } = extractPivotEntities(alerts.rows);
     return {
       incident: detail.rows[0],
       alerts: alerts.rows.map(({ Entities: _entities, ...alert }) => alert),
-      pivotEntities: extractPivotEntities(alerts.rows),
+      pivotEntities: pivots,
+      unresolvedEntities: unresolved,
     };
   }
 

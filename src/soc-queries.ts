@@ -208,10 +208,13 @@ export function ingestionVolumeQuery(staleAfterHours: number): string {
 
 export function ingestionLatencyQuery(): string {
   // Sampled over the last hour only: union * over a long window is expensive.
-  return `union withsource=TableName *
+  // withsource uses a name no real table carries: some workspaces have a table with its
+  // own TableName column, which makes `withsource=TableName` fail with SEM0001.
+  return `union withsource=AzureQueryMcpSourceTable *
 | where TimeGenerated > ago(1h)
 | extend LatencySec = datetime_diff('second', ingestion_time(), TimeGenerated)
-| summarize Events = count(), MedianLatencySec = percentile(LatencySec, 50), P95LatencySec = percentile(LatencySec, 95) by TableName
+| summarize Events = count(), MedianLatencySec = percentile(LatencySec, 50), P95LatencySec = percentile(LatencySec, 95)
+    by TableName = AzureQueryMcpSourceTable
 | sort by P95LatencySec desc
 | take 100`;
 }

@@ -42,18 +42,34 @@ test("tableToRows maps columns onto row objects", () => {
   assert.deepEqual(tableToRows(undefined), []);
 });
 
-test("extractPivotEntities pulls unique accounts, IPs and hosts from alert entities", () => {
+test("extractPivotEntities picks the best identifier from real-world entity shapes", () => {
   const entities = JSON.stringify([
-    { Type: "account", Name: "alice", UPNSuffix: "contoso.com" },
-    { Type: "account", Name: "alice", UPNSuffix: "CONTOSO.com" },
+    { Type: "account", Name: "alice", UPNSuffix: "contoso.com", UserPrincipalName: "alice@contoso.com" },
+    { Type: "account", Name: "bob", UPNSuffix: "contoso.com" },
+    { Type: "account", Name: "svc_backup", NTDomain: "CONTOSO", AccountName: "svc_backup" },
+    { Type: "account", Name: "Carol Jones", AccountName: "Carol Jones", IsDomainJoined: false },
+    { Type: "account", Sid: "S-1-5-21-1-2-3-500" },
+    { Type: "account", AadUserId: "11111111-2222-3333-4444-555555555555" },
     { Type: "ip", Address: "203.0.113.7" },
+    { Type: "ip", Address: "not-an-ip" },
     { Type: "host", HostName: "web-01", DnsDomain: "corp.contoso.com" },
     { Type: "file", Name: "evil.exe" },
   ]);
-  assert.deepEqual(extractPivotEntities([{ Entities: entities }, { Entities: "not json" }]), [
-    { type: "account", value: "alice@CONTOSO.com" },
+  const duplicate = JSON.stringify([{ Type: "account", UserPrincipalName: "ALICE@contoso.com" }]);
+  const { pivots, unresolved } = extractPivotEntities([{ Entities: entities }, { Entities: duplicate }, { Entities: "not json" }]);
+
+  assert.deepEqual(pivots, [
+    { type: "account", value: "ALICE@contoso.com" },
+    { type: "account", value: "bob@contoso.com" },
+    { type: "account", value: "svc_backup" },
     { type: "ip", value: "203.0.113.7" },
     { type: "host", value: "web-01.corp.contoso.com" },
+  ]);
+  assert.deepEqual(unresolved, [
+    { type: "account", reason: "only a display name is recorded, not a UPN or account name", label: "Carol Jones" },
+    { type: "account", reason: "only a SID is recorded" },
+    { type: "account", reason: "only an Entra object ID is recorded" },
+    { type: "ip", reason: "no valid address or hostname recorded" },
   ]);
 });
 
@@ -67,6 +83,7 @@ test("getIncident combines detail, alerts and pivot entities", async () => {
   assert.equal(result.incident.Title, "Possible credential theft");
   assert.deepEqual(result.alerts, [{ AlertName: "Suspicious sign-in" }]);
   assert.deepEqual(result.pivotEntities, [{ type: "ip", value: "198.51.100.4" }]);
+  assert.deepEqual(result.unresolvedEntities, []);
 });
 
 test("getIncident reports a missing incident clearly", async () => {
@@ -92,7 +109,7 @@ test("entityTimeline returns complete per-source totals alongside capped events"
 test("checkIngestionHealth summarises stale, dropped and delayed tables", async () => {
   const { runner, calls } = fakeRunner([
     [/^Usage/, table(["DataType", "Status"], [["SigninLogs", "Healthy"], ["CommonSecurityLog", "Stale"], ["Syslog", "VolumeDrop"], ["AzureActivity", "VolumeSpike"]])],
-    [/union withsource=TableName/, table(["TableName", "P95LatencySec"], [["SecurityEvent", 1800], ["SigninLogs", 120]])],
+    [/union withsource=AzureQueryMcpSourceTable/, table(["TableName", "P95LatencySec"], [["SecurityEvent", 1800], ["SigninLogs", 120]])],
   ]);
   const result = await new SocService(runner, new HuntingLibrary("")).checkIngestionHealth(workspaceId, "P7D", 24);
 

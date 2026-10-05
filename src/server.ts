@@ -179,7 +179,7 @@ export function createServer(
   server.registerTool(
     "get_incident",
     {
-      description: "Get one Microsoft Sentinel incident with its alerts and the account, IP and host entities involved. Returned pivotEntities can be passed directly to entity_timeline.",
+      description: "Get one Microsoft Sentinel incident with its alerts and the account, IP and host entities involved. Returned pivotEntities can be passed directly to entity_timeline; unresolvedEntities lists entities recorded without a usable identifier (for example only a display name or SID).",
       inputSchema: z.object({
         workspaceId: workspaceIdSchema,
         incidentNumber: z.number().int().min(1).describe("Incident number as shown in Sentinel."),
