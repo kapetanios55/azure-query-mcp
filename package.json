@@ -1,27 +1,36 @@
 {
   "name": "@kapetanios55/azure-query-mcp",
-  "version": "0.2.0",
-  "description": "A read-only MCP server for Azure Log Analytics and Azure Resource Graph.",
+  "version": "0.3.0",
+  "description": "Read-only MCP server for Azure Log Analytics, Microsoft Sentinel and Azure Resource Graph queries.",
   "license": "MIT",
   "author": "Andreas Kapetaniou",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Kapetanios55/azure-query-mcp.git"
+    "url": "git+https://github.com/kapetanios55/azure-query-mcp.git"
   },
-  "homepage": "https://github.com/Kapetanios55/azure-query-mcp#readme",
-  "bugs": "https://github.com/Kapetanios55/azure-query-mcp/issues",
+  "homepage": "https://github.com/kapetanios55/azure-query-mcp#readme",
+  "bugs": "https://github.com/kapetanios55/azure-query-mcp/issues",
   "keywords": [
     "azure",
     "mcp",
+    "mcp-server",
+    "model-context-protocol",
     "log-analytics",
+    "microsoft-sentinel",
     "resource-graph",
-    "kql"
+    "kql",
+    "security",
+    "threat-hunting"
   ],
   "files": [
     "dist",
     "README.md",
     "LICENSE"
   ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "type": "module",
   "bin": {
     "azure-query-mcp": "dist/index.js"

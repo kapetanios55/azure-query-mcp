@@ -1,8 +1,13 @@
+import { createRequire } from "node:module";
+
 import { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
 
 import { LogAnalyticsService } from "./azure-service.js";
 import { ResourceGraphService } from "./resource-graph-service.js";
+
+// Resolves to the package root from both src/ (tests) and dist/ (published build).
+const { version } = createRequire(import.meta.url)("../package.json") as { version: string };
 
 const readOnlyAnnotations = {
   readOnlyHint: true,
@@ -29,7 +34,7 @@ export function safeErrorMessage(error: unknown) {
     return "Request failed. Verify the inputs, Azure authentication, RBAC, and service availability.";
   }
 
-  const safeMessages = /^(?:KQL query|Only read-only KQL|Azure Resource Graph query|Only read-only Azure Resource Graph|workspaceResourceId|Azure authentication did not return|Azure Resource Graph request failed with HTTP|Azure Resource Graph response exceeds)/;
+  const safeMessages = /^(?:KQL query|Only read-only KQL|The evaluate plugin|Azure Resource Graph query|Only read-only Azure Resource Graph|workspaceResourceId|Azure authentication did not return|Azure Resource Graph request failed with HTTP|Azure Resource Graph response exceeds)/;
   return safeMessages.test(error.message)
     ? error.message
     : "Request failed. Verify the inputs, Azure authentication, RBAC, and service availability.";
@@ -39,7 +44,7 @@ export function createServer(
   logAnalyticsService = new LogAnalyticsService(),
   resourceGraphService = new ResourceGraphService(),
 ) {
-  const server = new McpServer({ name: "azure-data-explorer-mcp", version: "0.2.0" });
+  const server = new McpServer({ name: "azure-query-mcp", version });
 
   server.registerTool(
     "list_workspaces",

@@ -1,10 +1,15 @@
 # Azure Query MCP
 
+[![npm](https://img.shields.io/npm/v/@kapetanios55/azure-query-mcp)](https://www.npmjs.com/package/@kapetanios55/azure-query-mcp)
+[![CI](https://github.com/kapetanios55/azure-query-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/kapetanios55/azure-query-mcp/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/kapetanios55/azure-query-mcp/actions/workflows/codeql.yml/badge.svg)](https://github.com/kapetanios55/azure-query-mcp/actions/workflows/codeql.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 A read-only Model Context Protocol server for querying Azure Log Analytics and Azure Resource Graph (ARG). It runs locally over stdio and uses Azure RBAC through `DefaultAzureCredential`.
 
 ## What users should install
 
-This project is currently distributed from source. Each user runs the MCP server locally and authenticates with their own Microsoft Entra identity. Nothing is deployed into an Azure tenant, and the server does not receive shared credentials.
+The server is published to npm as `@kapetanios55/azure-query-mcp` and runs with `npx`, so there is nothing to clone or build. Each user runs it locally and authenticates with their own Microsoft Entra identity. Nothing is deployed into an Azure tenant, and the server does not receive shared credentials.
 
 Use it when an MCP client needs both of these Azure data planes:
 
@@ -27,6 +32,9 @@ ARG describes Azure control-plane resources and can be slightly delayed. It does
 - ARG calls a fixed Microsoft endpoint with API version `2024-04-01`; users cannot control the URL.
 - ARG requires explicit subscription scope and caps each page at 1,000 rows and 5 MiB.
 - Log Analytics requires bounded KQL and caps output at 1,000 rows and 2,000 characters per cell.
+- The read-only query policy ignores string literals and comments, so hunting filters such as `where OperationName has "delete"` are allowed while real management commands, `set` statements and `externaldata` are rejected. Malformed (unterminated) strings fail closed.
+- `evaluate` is limited to plugins that only reshape returned rows: `autocluster`, `bag_unpack`, `basket`, `diffpatterns`, `ipv4_lookup`, `ipv6_lookup`, `narrow`, `pivot` and `preview`. Plugins that reach outside the workspace (`http_request`, `sql_request`, `python`, `r`, ...) are blocked.
+- Releases are published from GitHub Actions with npm provenance, so each package version is traceable to the commit and workflow that built it.
 - Requests time out, upstream ARG error bodies are not returned, and access tokens are never logged.
 - Authentication and authorization are delegated to Microsoft Entra ID and Azure RBAC.
 
@@ -49,25 +57,18 @@ Recommended least-privilege roles:
 
 Custom roles can be narrower. The effective permissions must include the relevant Azure Resource Manager read operations and Log Analytics query access.
 
-## Set up locally
+## Quick start
 
-1. Clone and build the server.
+1. Sign in to the tenant that contains the target subscriptions and workspaces.
 
-   ```powershell
-   git clone https://github.com/kapetanios55/azure-query-mcp.git
-   Set-Location azure-query-mcp
-   npm ci
-   npm run check
-   ```
-
-2. Sign in to the tenant that contains the target subscriptions and workspaces.
-
-   ```powershell
+   ```bash
    az login --tenant <tenant-id>
    az account list --output table
    ```
 
-3. Add the server to the MCP client. For VS Code, add this to `.vscode/mcp.json` and replace the path with the absolute path to the cloned repository.
+2. Add the server to your MCP client. Each client starts it with `npx`, which downloads the published package on first use.
+
+   **VS Code** (`.vscode/mcp.json`):
 
    ```json
    {
@@ -81,8 +82,8 @@ Custom roles can be narrower. The effective permissions must include the relevan
      "servers": {
        "azure-query": {
          "type": "stdio",
-         "command": "node",
-         "args": ["C:/path/to/azure-query-mcp/dist/index.js"],
+         "command": "npx",
+         "args": ["-y", "@kapetanios55/azure-query-mcp"],
          "env": {
            "AZURE_TENANT_ID": "${input:azureTenantId}"
          }
@@ -91,9 +92,29 @@ Custom roles can be narrower. The effective permissions must include the relevan
    }
    ```
 
-4. Start `azure-query` from the MCP server view. Reload the VS Code window if the server does not appear after editing the configuration.
+   **Claude Desktop** (`claude_desktop_config.json`) and **Cursor** (`~/.cursor/mcp.json`):
 
-5. Verify both paths with prompts such as:
+   ```json
+   {
+     "mcpServers": {
+       "azure-query": {
+         "command": "npx",
+         "args": ["-y", "@kapetanios55/azure-query-mcp"],
+         "env": {
+           "AZURE_TENANT_ID": "<tenant-id>"
+         }
+       }
+     }
+   }
+   ```
+
+   **Claude Code**:
+
+   ```bash
+   claude mcp add azure-query --env AZURE_TENANT_ID=<tenant-id> -- npx -y @kapetanios55/azure-query-mcp
+   ```
+
+3. Verify both paths with prompts such as:
 
    ```text
    List the Log Analytics workspaces in subscription <subscription-id>.
@@ -104,6 +125,25 @@ Custom roles can be narrower. The effective permissions must include the relevan
 For production, use managed identity or workload identity. Avoid client secrets when the hosting platform supports federation.
 
 Never place `AZURE_CLIENT_SECRET` directly in a committed MCP configuration. Use the host's secret store or managed identity.
+
+## Run from source
+
+To work on the server itself, clone and build it, then point your MCP client at `dist/index.js` instead of `npx`:
+
+```bash
+git clone https://github.com/kapetanios55/azure-query-mcp.git
+cd azure-query-mcp
+npm ci
+npm run check
+```
+
+```json
+"azure-query": {
+  "type": "stdio",
+  "command": "node",
+  "args": ["/absolute/path/to/azure-query-mcp/dist/index.js"]
+}
+```
 
 ## Tools
 
@@ -271,14 +311,21 @@ Important: this identifies candidate exposure in configured custom NSG rules. It
 | Workspace metadata works but queries fail | Verify Log Analytics Reader access to the workspace and confirm the workspace customer ID. |
 | Table not found | Run `search_tables`, then query the exact returned table name. |
 | Query rejected as unbounded | Add `take`, `limit`, `top`, `summarize`, or `count` as appropriate. |
-| Server is not visible in VS Code | Run `npm run build`, verify the absolute `dist/index.js` path, then restart the MCP server or reload VS Code. |
+| Server is not visible in VS Code | Check that `npx` is on the PATH VS Code uses (or, from source, run `npm run build` and verify the absolute `dist/index.js` path), then restart the MCP server or reload VS Code. |
+| `evaluate` plugin rejected | Only row-reshaping plugins are allowed; see [Security properties](#security-properties) for the list. |
 
 ## Development
 
-```powershell
+```bash
 npm run check
 npm audit --omit=dev
 ```
+
+### Releasing
+
+1. Bump `version` in `package.json` (for example `npm version minor --no-git-tag-version`) and update [CHANGELOG.md](CHANGELOG.md).
+2. Merge to `main`, then tag the merge commit: `git tag v0.3.0 && git push origin v0.3.0`.
+3. The [Release workflow](.github/workflows/release.yml) checks that the tag matches `package.json`, runs the full check and audit, and publishes to npm with provenance using trusted publishing (no stored npm token).
 
 The implementation follows the Microsoft Learn [Azure Resource Graph REST API](https://learn.microsoft.com/azure/governance/resource-graph/first-query-rest-api) and [Resources API reference](https://learn.microsoft.com/rest/api/azureresourcegraph/resourcegraph/resources/resources?view=rest-azureresourcegraph-resourcegraph-2024-04-01).
 
