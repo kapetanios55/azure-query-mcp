@@ -6,11 +6,28 @@ import {
   LogsQueryResultStatus,
 } from "@azure/monitor-query-logs";
 
-import { validateQuery } from "./query-policy.js";
-import { shapeTable } from "./result-shaper.js";
+import { validateQuery, type QueryPolicyOptions } from "./query-policy.js";
+import { shapeTable, type ShapedTable } from "./result-shaper.js";
 import { parseWorkspaceResourceId } from "./workspace-id.js";
 
-export class LogAnalyticsService {
+export interface WorkspaceQueryResult {
+  status: LogsQueryResultStatus;
+  tables: ShapedTable[];
+  statistics?: unknown;
+  partialError?: unknown;
+}
+
+/** Runs a policy-checked KQL query against one workspace. Implemented by LogAnalyticsService. */
+export interface WorkspaceQueryRunner {
+  runQuery(
+    workspaceId: string,
+    query: string,
+    timespan: string,
+    policy?: Partial<QueryPolicyOptions>,
+  ): Promise<WorkspaceQueryResult>;
+}
+
+export class LogAnalyticsService implements WorkspaceQueryRunner {
   readonly #credential: TokenCredential;
   readonly #queryClient: LogsQueryClient;
 
@@ -100,7 +117,21 @@ export class LogAnalyticsService {
   }
 
   async queryWorkspace(workspaceId: string, query: string, timespan: string) {
-    validateQuery(query);
+    return this.runQuery(workspaceId, query, timespan);
+  }
+
+  /**
+   * Shared execution path for user KQL and the server's own SOC queries. Every query
+   * passes the read-only policy; built-in queries may opt out of the explicit result
+   * limit because output is still capped by the result shaper.
+   */
+  async runQuery(
+    workspaceId: string,
+    query: string,
+    timespan: string,
+    policy: Partial<QueryPolicyOptions> = {},
+  ): Promise<WorkspaceQueryResult> {
+    validateQuery(query, { maxLength: 5_000, requireResultLimit: true, ...policy });
 
     const result = await this.#queryClient.queryWorkspace(workspaceId, query, { duration: timespan }, {
       serverTimeoutInSeconds: 180,
