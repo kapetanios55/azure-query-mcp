@@ -10,10 +10,23 @@ const tables = [
   "SigninLogs", "Usage",
 ];
 
-const decode = (text) => text
-  .replace(/<[^>]+>/g, "")
-  .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'")
-  .trim();
+const entities = { amp: "&", lt: "<", gt: ">", quot: '"', "#39": "'" };
+
+function cellText(html) {
+  // Strip tags until none remain, then decode entities in a single pass so an
+  // encoded entity such as &amp;lt; is never decoded twice.
+  let text = html;
+  for (let previous; previous !== text;) {
+    previous = text;
+    text = text.replace(/<[^<>]*>/g, "");
+  }
+  return text.replace(/&(amp|lt|gt|quot|#39);/g, (_, name) => entities[name]).trim();
+}
+
+// Column names and types are written into KQL schema strings by the test, so only
+// accept plain identifiers and known Kusto scalar types.
+const columnName = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const scalarTypes = new Set(["bool", "datetime", "dynamic", "guid", "int", "long", "real", "string", "timespan", "decimal"]);
 
 const schemas = {};
 for (const table of tables) {
@@ -25,9 +38,15 @@ for (const table of tables) {
   const html = await response.text();
   for (const block of html.match(/<table[\s\S]*?<\/table>/g) ?? []) {
     const rows = [...block.matchAll(/<tr>([\s\S]*?)<\/tr>/g)]
-      .map(([, row]) => [...row.matchAll(/<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/g)].map(([, cell]) => decode(cell)));
+      .map(([, row]) => [...row.matchAll(/<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/g)].map(([, cell]) => cellText(cell)));
     if (rows[0]?.[0] === "Column" && rows[0]?.[1] === "Type") {
-      schemas[table] = rows.slice(1).filter((row) => row.length >= 2).map(([column, type]) => [column, type]);
+      schemas[table] = rows.slice(1).filter((row) => row.length >= 2).map(([column, rawType]) => {
+        const type = rawType.toLowerCase();
+        if (!columnName.test(column) || !scalarTypes.has(type)) {
+          throw new Error(`${table}: unexpected column '${column}' of type '${rawType}'`);
+        }
+        return [column, type];
+      });
     }
   }
   if (!schemas[table]?.length) {
