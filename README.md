@@ -1,6 +1,6 @@
 # Azure Query MCP
 
-[![npm](https://img.shields.io/npm/v/@kapetanios55/azure-query-mcp)](https://www.npmjs.com/package/@kapetanios55/azure-query-mcp)
+[![npm](https://img.shields.io/npm/v/@akapetaniou/azure-query-mcp)](https://www.npmjs.com/package/@akapetaniou/azure-query-mcp)
 [![CI](https://github.com/kapetanios55/azure-query-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/kapetanios55/azure-query-mcp/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/kapetanios55/azure-query-mcp/actions/workflows/codeql.yml/badge.svg)](https://github.com/kapetanios55/azure-query-mcp/actions/workflows/codeql.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -9,7 +9,7 @@ A read-only Model Context Protocol server for querying Azure Log Analytics and A
 
 ## What users should install
 
-The server is published to npm as `@kapetanios55/azure-query-mcp` and runs with `npx`, so there is nothing to clone or build. Each user runs it locally and authenticates with their own Microsoft Entra identity. Nothing is deployed into an Azure tenant, and the server does not receive shared credentials.
+The server is published to npm as `@akapetaniou/azure-query-mcp` and runs with `npx`, so there is nothing to clone or build. Each user runs it locally and authenticates with their own Microsoft Entra identity. Nothing is deployed into an Azure tenant, and the server does not receive shared credentials.
 
 Use it when an MCP client needs both of these Azure data planes:
 
@@ -83,7 +83,7 @@ Custom roles can be narrower. The effective permissions must include the relevan
        "azure-query": {
          "type": "stdio",
          "command": "npx",
-         "args": ["-y", "@kapetanios55/azure-query-mcp"],
+         "args": ["-y", "@akapetaniou/azure-query-mcp"],
          "env": {
            "AZURE_TENANT_ID": "${input:azureTenantId}"
          }
@@ -99,7 +99,7 @@ Custom roles can be narrower. The effective permissions must include the relevan
      "mcpServers": {
        "azure-query": {
          "command": "npx",
-         "args": ["-y", "@kapetanios55/azure-query-mcp"],
+         "args": ["-y", "@akapetaniou/azure-query-mcp"],
          "env": {
            "AZURE_TENANT_ID": "<tenant-id>"
          }
@@ -111,7 +111,7 @@ Custom roles can be narrower. The effective permissions must include the relevan
    **Claude Code**:
 
    ```bash
-   claude mcp add azure-query --env AZURE_TENANT_ID=<tenant-id> -- npx -y @kapetanios55/azure-query-mcp
+   claude mcp add azure-query --env AZURE_TENANT_ID=<tenant-id> -- npx -y @akapetaniou/azure-query-mcp
    ```
 
 3. Verify both paths with prompts such as:
