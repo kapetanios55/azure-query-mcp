@@ -1,0 +1,38 @@
+{
+  "name": "azure-query",
+  "displayName": "Azure Query",
+  "version": "0.4.0",
+  "description": "Read-only Azure Log Analytics, Microsoft Sentinel and Azure Resource Graph queries: the azure-query MCP server plus a skill that teaches Claude when and how to use each tool.",
+  "author": {
+    "name": "Andreas Kapetaniou",
+    "url": "https://github.com/kapetanios55"
+  },
+  "homepage": "https://github.com/kapetanios55/azure-query-mcp#readme",
+  "repository": "https://github.com/kapetanios55/azure-query-mcp",
+  "license": "MIT",
+  "keywords": ["azure", "log-analytics", "microsoft-sentinel", "resource-graph", "kql", "security", "threat-hunting"],
+  "mcpServers": {
+    "azure-query": {
+      "command": "npx",
+      "args": ["-y", "@akapetaniou/azure-query-mcp@0.4.0"],
+      "env": {
+        "AZURE_TENANT_ID": "${user_config.tenant_id}",
+        "AZURE_QUERY_MCP_HUNTING_DIR": "${user_config.hunting_dir}"
+      }
+    }
+  },
+  "userConfig": {
+    "tenant_id": {
+      "type": "string",
+      "title": "Microsoft Entra tenant ID",
+      "description": "Tenant that holds the subscriptions and workspaces to query. Leave empty to use the tenant of your current az login session.",
+      "default": ""
+    },
+    "hunting_dir": {
+      "type": "directory",
+      "title": "Hunting query folder (optional)",
+      "description": "Folder of SentinelCBContent-format JSON hunting queries to load alongside the built-in hunts. Leave empty for the built-in hunts only.",
+      "default": ""
+    }
+  }
+}

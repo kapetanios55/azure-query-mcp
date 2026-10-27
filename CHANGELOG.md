@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Claude Code plugin and marketplace (`.claude-plugin/`): `/plugin install azure-query --marketplace kapetanios55/azure-query-mcp` installs the MCP server, pinned to the matching npm release, together with the agent skill. The tenant ID and hunting-query folder are prompted for as plugin settings.
 - Agent skill `skills/azure-query` (Agent Skills format) that tells agents when and how to use each tool: workspace identifiers, the KQL rules the server enforces, error recovery, SOC workflows and safety rules, with tested example queries for Log Analytics and Resource Graph. CI validates the skill and every example query.
 - Security: update `@modelcontextprotocol/server` to 2.4.0, `zod` to 4.6.7 and `@azure/identity` to 4.14.0, and pin `@azure/msal-node` to 7.1.1 or later through `overrides`, clearing every high-severity `npm audit` finding (GHSA-jm63-cq47-j5jp, GHSA-46jr-4wx8-v453, GHSA-rvq5-wwqv-78pq, GHSA-mrhx-c7xc-m3w5, GHSA-xcx6-jx8p-x3h5).
 - Query errors are actionable: when Log Analytics, ARM or Resource Graph rejects a request with HTTP 400, the tool returns the most specific service message (for example `SEM0100: 'where' operator: Failed to resolve column ...`) instead of a generic failure. Authentication, authorization, not-found, throttling, network and credential-chain failures return a specific fix hint; upstream messages for those are still withheld.
