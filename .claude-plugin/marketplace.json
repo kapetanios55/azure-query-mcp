@@ -8,7 +8,7 @@
   "plugins": [
     {
       "name": "azure-query",
-      "source": "./",
+      "source": "./plugin",
       "category": "security",
       "tags": ["azure", "sentinel", "kql", "soc"]
     }

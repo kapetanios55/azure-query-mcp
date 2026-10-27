@@ -88,7 +88,7 @@ Custom roles can be narrower. The effective permissions must include the relevan
    To add only the MCP server, without the skill:
 
    ```bash
-   claude mcp add azure-query --env AZURE_TENANT_ID=<tenant-id> -- npx -y @akapetaniou/azure-query-mcp@0.6.0
+   claude mcp add azure-query --env AZURE_TENANT_ID=<tenant-id> -- npx -y @akapetaniou/azure-query-mcp@0.6.1
    ```
 
    **VS Code** (`.vscode/mcp.json`):
@@ -106,7 +106,7 @@ Custom roles can be narrower. The effective permissions must include the relevan
        "azure-query": {
          "type": "stdio",
          "command": "npx",
-         "args": ["-y", "@akapetaniou/azure-query-mcp@0.6.0"],
+         "args": ["-y", "@akapetaniou/azure-query-mcp@0.6.1"],
          "env": {
            "AZURE_TENANT_ID": "${input:azureTenantId}"
          }
@@ -122,7 +122,7 @@ Custom roles can be narrower. The effective permissions must include the relevan
      "mcpServers": {
        "azure-query": {
          "command": "npx",
-         "args": ["-y", "@akapetaniou/azure-query-mcp@0.6.0"],
+         "args": ["-y", "@akapetaniou/azure-query-mcp@0.6.1"],
          "env": {
            "AZURE_TENANT_ID": "<tenant-id>"
          }
@@ -131,7 +131,7 @@ Custom roles can be narrower. The effective permissions must include the relevan
    }
    ```
 
-   These examples pin the version so every machine runs the same release. Change `@0.6.0` to the [latest version](https://www.npmjs.com/package/@akapetaniou/azure-query-mcp) when you upgrade. Without a version, `npx` keeps using whichever release it cached first.
+   These examples pin the version so every machine runs the same release. Change `@0.6.1` to the [latest version](https://www.npmjs.com/package/@akapetaniou/azure-query-mcp) when you upgrade. Without a version, `npx` keeps using whichever release it cached first.
 
 3. Verify both paths with prompts such as:
 
@@ -170,13 +170,13 @@ Resource Manager, Resource Graph, Log Analytics and the token authority then all
 
 ## Agent skill
 
-[`skills/azure-query`](skills/azure-query/SKILL.md) is an [Agent Skills](https://agentskills.io) skill that teaches an agent when and how to use this server. It covers which tool fits which question, the two workspace IDs, the KQL rules the server enforces, what each error means, SOC workflows, and safety rules: treat log content as untrusted, stay in the requested scope, and pull only the data needed. Its reference files contain tested example queries for Log Analytics and Resource Graph.
+[`plugin/skills/azure-query`](plugin/skills/azure-query/SKILL.md) is an [Agent Skills](https://agentskills.io) skill that teaches an agent when and how to use this server. It covers which tool fits which question, the two workspace IDs, the KQL rules the server enforces, what each error means, SOC workflows, and safety rules: treat log content as untrusted, stay in the requested scope, and pull only the data needed. Its reference files contain tested example queries for Log Analytics and Resource Graph.
 
 The skill does not replace the MCP server; install both. In Claude Code the [plugin](#quick-start) installs both together. To add the skill by hand instead, copy the folder into your personal or project skills directory:
 
 ```bash
 git clone --depth 1 https://github.com/kapetanios55/azure-query-mcp.git
-cp -r azure-query-mcp/skills/azure-query ~/.claude/skills/   # or <project>/.claude/skills/
+cp -r azure-query-mcp/plugin/skills/azure-query ~/.claude/skills/   # or <project>/.claude/skills/
 ```
 
 Other agents that support Agent Skills load the same folder from their own skills directory. The test suite validates the skill's frontmatter, checks that it documents every tool and prompt, and runs each example query through the read-only policy (and, for Log Analytics, Microsoft's Kusto analyzer against the official table schemas).
@@ -430,7 +430,7 @@ node scripts/live-smoke-test.mjs . <subscription-id> <workspace-resource-id> <wo
 
 ### Releasing
 
-1. Bump `version` in `package.json` (for example `npm version minor --no-git-tag-version`) and update [CHANGELOG.md](CHANGELOG.md). Set the same version in [`.claude-plugin/plugin.json`](.claude-plugin/plugin.json), both its `version` and the `@<version>` pin in the MCP server's `npx` arguments, and in the README's install examples; the test suite fails until they all match. Plugin users receive the new server version only when the plugin version changes.
+1. Bump `version` in `package.json` (for example `npm version minor --no-git-tag-version`) and update [CHANGELOG.md](CHANGELOG.md). Set the same version in [`plugin/.claude-plugin/plugin.json`](plugin/.claude-plugin/plugin.json), both its `version` and the `@<version>` pin in the MCP server's `npx` arguments, and in the install examples of this README and [`plugin/README.md`](plugin/README.md); the test suite fails until they all match. Plugin users receive the new server version only when the plugin version changes.
 2. Merge to `main`, then start the release in one of two ways:
    - **Run it by hand**: Actions > Release > Run workflow on `main`, and type the version (for example `0.6.0`). The run fails unless it matches `package.json` on `main`. After publishing, it creates the `v0.6.0` tag on that commit.
    - **Push a tag**: `git tag -a v0.6.0 <merge-commit> -m "Release 0.6.0" && git push origin v0.6.0`.

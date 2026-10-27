@@ -1,7 +1,7 @@
 {
   "name": "azure-query",
   "displayName": "Azure Query",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Read-only Azure Log Analytics, Microsoft Sentinel and Azure Resource Graph queries: the azure-query MCP server plus a skill that teaches Claude when and how to use each tool.",
   "author": {
     "name": "Andreas Kapetaniou",
@@ -14,7 +14,7 @@
   "mcpServers": {
     "azure-query": {
       "command": "npx",
-      "args": ["-y", "@akapetaniou/azure-query-mcp@0.6.0"],
+      "args": ["-y", "@akapetaniou/azure-query-mcp@0.6.1"],
       "env": {
         "AZURE_TENANT_ID": "${user_config.tenant_id}",
         "AZURE_QUERY_MCP_HUNTING_DIR": "${user_config.hunting_dir}",
