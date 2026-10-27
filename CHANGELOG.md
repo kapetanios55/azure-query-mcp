@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.6.0 (2026-10-27)
+
+**Upgrading:** queries and hunting files that use `workspace()`, `app()`, `resource()`, `adx()`, `arg()`, `cluster()` or `database()` now need `AZURE_QUERY_MCP_ALLOW_CROSS_RESOURCE=true` (plugin setting: *Allow cross-resource queries*).
 
 - Workspace tools accept the workspace's full ARM resource ID as well as its workspace ID (GUID). The server resolves a resource ID through Azure Resource Manager once and caches it. `search_tables` and `describe_table` still need the resource ID, and now say so when given a GUID.
 - Timespans accept absolute ISO 8601 intervals (`start/end`, `start/duration`, `duration/end`) as well as durations. Times must carry `Z` or an offset, and impossible dates are rejected. `check_ingestion_health` keeps durations only, because it measures against now.

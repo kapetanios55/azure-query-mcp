@@ -1,6 +1,6 @@
 {
   "name": "@akapetaniou/azure-query-mcp",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Read-only MCP server for Azure Log Analytics, Microsoft Sentinel and Azure Resource Graph queries.",
   "license": "MIT",
   "author": "Andreas Kapetaniou",
