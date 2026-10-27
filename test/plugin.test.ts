@@ -42,3 +42,10 @@ test("every user_config reference is declared with a default the server reads as
 test("the marketplace lists the plugin from the repository root", () => {
   assert.deepEqual(marketplace.plugins.map(({ name, source }) => ({ name, source })), [{ name: plugin.name, source: "./" }]);
 });
+
+test("the README install examples pin the package version", () => {
+  const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
+  const pins = [...readme.matchAll(/@akapetaniou\/azure-query-mcp@([\w.-]+)/g)].map((match) => match[1]);
+  assert.ok(pins.length >= 3, "the claude mcp add, VS Code and Claude Desktop examples pin a version");
+  assert.deepEqual([...new Set(pins)], [pkg.version], "update the README pins when the version changes");
+});

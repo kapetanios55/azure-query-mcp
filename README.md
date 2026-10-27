@@ -5,16 +5,14 @@
 [![CodeQL](https://github.com/kapetanios55/azure-query-mcp/actions/workflows/codeql.yml/badge.svg)](https://github.com/kapetanios55/azure-query-mcp/actions/workflows/codeql.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-A read-only Model Context Protocol server for querying Azure Log Analytics, Microsoft Sentinel and Azure Resource Graph (ARG), with purpose-built SOC tools for incident triage, entity investigation, ingestion health and threat hunting. It runs locally over stdio and uses Azure RBAC through `DefaultAzureCredential`.
+A read-only Model Context Protocol (MCP) server that lets an AI assistant query Azure Log Analytics, Microsoft Sentinel and Azure Resource Graph (ARG). Beyond raw KQL, it has purpose-built SOC tools for incident triage, entity timelines, ingestion health and threat hunting.
 
-## What users should install
+## How it works
 
-The server is published to npm as `@akapetaniou/azure-query-mcp` and runs with `npx`, so there is nothing to clone or build. Each user runs it locally and authenticates with their own Microsoft Entra identity. Nothing is deployed into an Azure tenant, and the server does not receive shared credentials.
-
-Use it when an MCP client needs both of these Azure data planes:
-
-- Log Analytics for logs, events, telemetry, and time-series analysis.
-- Azure Resource Graph for resource inventory and control-plane configuration.
+- **Runs on your machine.** The server is the npm package `@akapetaniou/azure-query-mcp`, started by your MCP client with `npx` over stdio. There is nothing to clone, build or deploy into Azure.
+- **Uses your own Azure identity.** It signs in through `DefaultAzureCredential` (for example your `az login` session), so it can read exactly what your Azure RBAC allows, and nothing is shared between users.
+- **Talks only to Azure.** It connects to Microsoft Entra ID, Azure Resource Manager (including Resource Graph) and the Log Analytics query API of the selected cloud, plus the local managed identity endpoint when `DefaultAzureCredential` tries it. `npx` downloads the package from the npm registry on first use. There is no telemetry, and query results are not stored.
+- **Covers two data planes.** Log Analytics holds logs, events and security data; Resource Graph holds resource inventory and configuration.
 
 ## Choose the right tool
 
@@ -48,11 +46,9 @@ See [SECURITY.md](SECURITY.md) before production deployment.
 
 ## Prerequisites
 
-- Git
-- Node.js 22 or later
-- Azure CLI for local interactive authentication
-- An Azure identity available to `DefaultAzureCredential`
-- Azure RBAC on only the subscriptions and workspaces that should be queried
+- Node.js 22 or later (provides `npx`)
+- Azure CLI, for signing in interactively with `az login`, or another identity that `DefaultAzureCredential` supports, such as a managed identity
+- Azure RBAC on the subscriptions and workspaces to be queried, and nothing more
 
 Recommended least-privilege roles:
 
@@ -72,7 +68,28 @@ Custom roles can be narrower. The effective permissions must include the relevan
    az account list --output table
    ```
 
-2. Add the server to your MCP client. Each client starts it with `npx`, which downloads the published package on first use.
+2. Add the server to your MCP client.
+
+   **Claude Code (recommended):** install the plugin, which adds the MCP server and the [agent skill](#agent-skill) in one step. In Claude Code v2.1.275 or later:
+
+   ```text
+   /plugin install azure-query --marketplace kapetanios55/azure-query-mcp
+   ```
+
+   On earlier versions, add the marketplace first, then install from it:
+
+   ```text
+   /plugin marketplace add kapetanios55/azure-query-mcp
+   /plugin install azure-query@azure-query-mcp
+   ```
+
+   Claude Code asks for optional settings: the Entra tenant ID (leave empty to use your `az login` tenant), a hunting-query folder, the Azure cloud, and whether to allow cross-resource queries (see [Configuration](#configuration)). Change them later with `/plugin configure azure-query@azure-query-mcp`. Each plugin version runs the exact npm release it was tested with; get new releases with `/plugin update azure-query@azure-query-mcp`.
+
+   To add only the MCP server, without the skill:
+
+   ```bash
+   claude mcp add azure-query --env AZURE_TENANT_ID=<tenant-id> -- npx -y @akapetaniou/azure-query-mcp@0.6.0
+   ```
 
    **VS Code** (`.vscode/mcp.json`):
 
@@ -89,7 +106,7 @@ Custom roles can be narrower. The effective permissions must include the relevan
        "azure-query": {
          "type": "stdio",
          "command": "npx",
-         "args": ["-y", "@akapetaniou/azure-query-mcp"],
+         "args": ["-y", "@akapetaniou/azure-query-mcp@0.6.0"],
          "env": {
            "AZURE_TENANT_ID": "${input:azureTenantId}"
          }
@@ -105,7 +122,7 @@ Custom roles can be narrower. The effective permissions must include the relevan
      "mcpServers": {
        "azure-query": {
          "command": "npx",
-         "args": ["-y", "@akapetaniou/azure-query-mcp"],
+         "args": ["-y", "@akapetaniou/azure-query-mcp@0.6.0"],
          "env": {
            "AZURE_TENANT_ID": "<tenant-id>"
          }
@@ -114,26 +131,7 @@ Custom roles can be narrower. The effective permissions must include the relevan
    }
    ```
 
-   **Claude Code**: install the plugin, which adds the MCP server and the [agent skill](#agent-skill) in one step. In Claude Code (v2.1.275 or later):
-
-   ```text
-   /plugin install azure-query --marketplace kapetanios55/azure-query-mcp
-   ```
-
-   On earlier versions, add the marketplace first, then install from it:
-
-   ```text
-   /plugin marketplace add kapetanios55/azure-query-mcp
-   /plugin install azure-query@azure-query-mcp
-   ```
-
-   Claude Code asks for optional settings: the Entra tenant ID (leave empty to use your `az login` tenant), a hunting-query folder, the Azure cloud, and whether to allow cross-resource queries (see [Configuration](#configuration)). Change them later with `/plugin configure azure-query@azure-query-mcp`. Each plugin version runs the exact npm release it was tested with.
-
-   To add only the MCP server, without the skill:
-
-   ```bash
-   claude mcp add azure-query --env AZURE_TENANT_ID=<tenant-id> -- npx -y @akapetaniou/azure-query-mcp
-   ```
+   These examples pin the version so every machine runs the same release. Change `@0.6.0` to the [latest version](https://www.npmjs.com/package/@akapetaniou/azure-query-mcp) when you upgrade. Without a version, `npx` keeps using whichever release it cached first.
 
 3. Verify both paths with prompts such as:
 
@@ -182,25 +180,6 @@ cp -r azure-query-mcp/skills/azure-query ~/.claude/skills/   # or <project>/.cla
 ```
 
 Other agents that support Agent Skills load the same folder from their own skills directory. The test suite validates the skill's frontmatter, checks that it documents every tool and prompt, and runs each example query through the read-only policy (and, for Log Analytics, Microsoft's Kusto analyzer against the official table schemas).
-
-## Run from source
-
-To work on the server itself, clone and build it, then point your MCP client at `dist/index.js` instead of `npx`:
-
-```bash
-git clone https://github.com/kapetanios55/azure-query-mcp.git
-cd azure-query-mcp
-npm ci
-npm run check
-```
-
-```json
-"azure-query": {
-  "type": "stdio",
-  "command": "node",
-  "args": ["/absolute/path/to/azure-query-mcp/dist/index.js"]
-}
-```
 
 ## SOC tools
 
@@ -264,7 +243,7 @@ timespan: PT1H
 
 `workspaceId` also accepts the workspace's full ARM resource ID, which the server resolves to its workspace ID once. `timespan` also accepts an absolute interval, for example `2026-10-01T08:00:00Z/PT6H` or `2026-10-01T00:00:00Z/2026-10-02T00:00:00Z`; times need `Z` or an offset.
 
-The remaining tools discover workspaces and inspect Log Analytics table metadata.
+`list_workspaces` returns both IDs for each workspace in a subscription. `search_tables` and `describe_table` list a workspace's tables and their columns; use them before writing KQL against an unfamiliar table.
 
 ## Log Analytics examples
 
@@ -300,7 +279,7 @@ KQL:
 
 ```kusto
 SigninLogs
-| where ResultType != 0
+| where ResultType != "0"
 | summarize FailedSignIns=count() by UserPrincipalName
 | top 20 by FailedSignIns desc
 ```
@@ -403,7 +382,7 @@ Important: this identifies candidate exposure in configured custom NSG rules. It
 | --- | --- |
 | Wrong-token-issuer or tenant error | Run `az login --tenant <tenant-id>` and make sure `AZURE_TENANT_ID` uses the same tenant. |
 | `AuthorizationFailed` from ARG | Verify Reader access at the requested subscription or resource scope. |
-| Workspace metadata works but queries fail | Verify Log Analytics Reader access to the workspace and confirm the workspace customer ID. |
+| Workspace metadata works but queries fail | Verify Log Analytics Reader access to the workspace, and pass the workspace ID or resource ID from `list_workspaces`. |
 | Table not found | Run `search_tables`, then query the exact returned table name. |
 | `list_hunting_queries` reports that `AZURE_QUERY_MCP_HUNTING_DIR` could not be read | Check that the path exists and is readable by the user running the MCP client, then restart the server. |
 | `Cross-resource query functions ... are disabled` | Query one workspace per call, or set `AZURE_QUERY_MCP_ALLOW_CROSS_RESOURCE=true` if reading other workspaces or clusters is intended. |
@@ -414,6 +393,27 @@ Important: this identifies candidate exposure in configured custom NSG rules. It
 | `evaluate` plugin rejected | Only row-reshaping plugins are allowed; see [Security properties](#security-properties) for the list. |
 
 ## Development
+
+### Run from source
+
+To work on the server itself (needs Git), clone and build it, then point your MCP client at `dist/index.js` instead of `npx`:
+
+```bash
+git clone https://github.com/kapetanios55/azure-query-mcp.git
+cd azure-query-mcp
+npm ci
+npm run check
+```
+
+```json
+"azure-query": {
+  "type": "stdio",
+  "command": "node",
+  "args": ["/absolute/path/to/azure-query-mcp/dist/index.js"]
+}
+```
+
+Before a pull request, run the same checks as CI:
 
 ```bash
 npm run check
@@ -430,7 +430,7 @@ node scripts/live-smoke-test.mjs . <subscription-id> <workspace-resource-id> <wo
 
 ### Releasing
 
-1. Bump `version` in `package.json` (for example `npm version minor --no-git-tag-version`) and update [CHANGELOG.md](CHANGELOG.md). Set the same version in [`.claude-plugin/plugin.json`](.claude-plugin/plugin.json), both its `version` and the `@<version>` pin in the MCP server's `npx` arguments; the test suite fails until all three match. Plugin users receive the new server version only when the plugin version changes.
+1. Bump `version` in `package.json` (for example `npm version minor --no-git-tag-version`) and update [CHANGELOG.md](CHANGELOG.md). Set the same version in [`.claude-plugin/plugin.json`](.claude-plugin/plugin.json), both its `version` and the `@<version>` pin in the MCP server's `npx` arguments, and in the README's install examples; the test suite fails until they all match. Plugin users receive the new server version only when the plugin version changes.
 2. Merge to `main`, then start the release in one of two ways:
    - **Run it by hand**: Actions > Release > Run workflow on `main`, and type the version (for example `0.6.0`). The run fails unless it matches `package.json` on `main`. After publishing, it creates the `v0.6.0` tag on that commit.
    - **Push a tag**: `git tag -a v0.6.0 <merge-commit> -m "Release 0.6.0" && git push origin v0.6.0`.
@@ -438,7 +438,10 @@ node scripts/live-smoke-test.mjs . <subscription-id> <workspace-resource-id> <wo
 
 npm's trusted publisher for this package is set to the workflow file `release.yml` and the `npm` environment. Renaming either breaks publishing until the npm setting is updated to match.
 
-The implementation follows the Microsoft Learn [Azure Resource Graph REST API](https://learn.microsoft.com/azure/governance/resource-graph/first-query-rest-api) and [Resources API reference](https://learn.microsoft.com/rest/api/azureresourcegraph/resourcegraph/resources/resources?view=rest-azureresourcegraph-resourcegraph-2024-04-01).
+
+## References
+
+The Resource Graph client follows the Microsoft Learn [Azure Resource Graph REST API](https://learn.microsoft.com/azure/governance/resource-graph/first-query-rest-api) and [Resources API reference](https://learn.microsoft.com/rest/api/azureresourcegraph/resourcegraph/resources/resources?view=rest-azureresourcegraph-resourcegraph-2024-04-01).
 
 ## License
 
