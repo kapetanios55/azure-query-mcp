@@ -1,22 +1,42 @@
 name: Release
+run-name: Release ${{ inputs.version || github.ref_name }}
 
-# Publishes to npm when a version tag (v1.2.3) is pushed. Authentication uses npm
-# trusted publishing (GitHub OIDC), so no npm token is stored in this repository.
+# Publishes to npm when a version tag (v1.2.3) is pushed, or when the workflow is run
+# by hand from main with the version typed in (Actions > Release > Run workflow). A
+# manual run publishes the package.json version on main and then creates its tag.
+# Authentication uses npm trusted publishing (GitHub OIDC), so no npm token is stored
+# in this repository.
 on:
   push:
     tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish, without the v (for example 0.6.0). Must equal package.json on main."
+        required: true
+        type: string
 
 permissions:
   contents: read
 
+# One release at a time; a second run waits rather than racing the first.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   publish:
+    # Manual runs publish only from main.
+    if: github.event_name == 'push' || (github.ref_type == 'branch' && github.ref_name == 'main')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: npm
     permissions:
       contents: read
       id-token: write
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      tag_exists: ${{ steps.version.outputs.tag_exists }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -26,17 +46,41 @@ jobs:
           cache: npm
       # Trusted publishing needs npm 11.5.1 or later; Node 22 ships with npm 10.
       - run: npm install --global npm@^11.5.1
-      - name: Check the tag matches package.json
+      - name: Check the version matches package.json
+        id: version
+        env:
+          EVENT: ${{ github.event_name }}
+          REQUESTED: ${{ inputs.version }}
         run: |
           version="$(node -p "require('./package.json').version")"
-          if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
+          tag="v${version}"
+          if [ "${EVENT}" = "workflow_dispatch" ]; then
+            if [ "${REQUESTED}" != "${version}" ]; then
+              echo "Requested version ${REQUESTED} does not match package.json version ${version} on main" >&2
+              exit 1
+            fi
+            # Refuse to publish if the tag already names a different commit.
+            if git fetch --quiet --depth=1 origin "refs/tags/${tag}:refs/tags/${tag}" 2>/dev/null; then
+              tagged="$(git rev-list -n 1 "${tag}")"
+              if [ "${tagged}" != "${GITHUB_SHA}" ]; then
+                echo "Tag ${tag} already exists on ${tagged}, not on this commit (${GITHUB_SHA})" >&2
+                exit 1
+              fi
+              echo "tag_exists=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "tag_exists=false" >> "$GITHUB_OUTPUT"
+            fi
+          elif [ "${tag}" != "${GITHUB_REF_NAME}" ]; then
             echo "Tag ${GITHUB_REF_NAME} does not match package.json version ${version}" >&2
             exit 1
+          else
+            echo "tag_exists=true" >> "$GITHUB_OUTPUT"
           fi
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
       - run: npm ci --ignore-scripts
       - run: npm run check
       - run: npm audit --omit=dev --audit-level=high
-      # Tagging a version that was already published (for example the first release,
+      # Releasing a version that was already published (for example the first release,
       # which had to be published manually) skips the upload instead of failing.
       - name: Check whether this version is already on npm
         id: published
@@ -51,3 +95,23 @@ jobs:
           fi
       - if: steps.published.outputs.already != 'true'
         run: npm publish --provenance --access public
+
+  # Tags the published commit after a manual run. It is the only job that can write to
+  # the repository. A tag pushed with GITHUB_TOKEN does not start this workflow again.
+  tag:
+    needs: publish
+    if: github.event_name == 'workflow_dispatch' && needs.publish.outputs.tag_exists != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Create and push the release tag
+        env:
+          TAG: ${{ needs.publish.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${TAG}" "${GITHUB_SHA}" -m "Release ${TAG#v}"
+          git push origin "refs/tags/${TAG}"

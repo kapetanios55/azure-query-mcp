@@ -402,8 +402,12 @@ node scripts/live-smoke-test.mjs . <subscription-id> <workspace-resource-id> <wo
 ### Releasing
 
 1. Bump `version` in `package.json` (for example `npm version minor --no-git-tag-version`) and update [CHANGELOG.md](CHANGELOG.md). Set the same version in [`.claude-plugin/plugin.json`](.claude-plugin/plugin.json), both its `version` and the `@<version>` pin in the MCP server's `npx` arguments; the test suite fails until all three match. Plugin users receive the new server version only when the plugin version changes.
-2. Merge to `main`, then tag the merge commit: `git tag v0.3.0 && git push origin v0.3.0`.
-3. The [Release workflow](.github/workflows/release.yml) checks that the tag matches `package.json`, runs the full check and audit, and publishes to npm with provenance using trusted publishing (no stored npm token).
+2. Merge to `main`, then start the release in one of two ways:
+   - **Run it by hand**: Actions > Release > Run workflow on `main`, and type the version (for example `0.6.0`). The run fails unless it matches `package.json` on `main`. After publishing, it creates the `v0.6.0` tag on that commit.
+   - **Push a tag**: `git tag -a v0.6.0 <merge-commit> -m "Release 0.6.0" && git push origin v0.6.0`.
+3. The [Release workflow](.github/workflows/release.yml) checks the version against `package.json`, runs the full check and audit, and publishes to npm with provenance using trusted publishing (no stored npm token). A version already on npm is skipped, and a manual run refuses to publish if the tag already exists on a different commit. Publish promptly after merging: until the new version is on npm, the plugin on `main` pins a version npm doesn't have yet.
+
+npm's trusted publisher for this package is set to the workflow file `release.yml` and the `npm` environment. Renaming either breaks publishing until the npm setting is updated to match.
 
 The implementation follows the Microsoft Learn [Azure Resource Graph REST API](https://learn.microsoft.com/azure/governance/resource-graph/first-query-rest-api) and [Resources API reference](https://learn.microsoft.com/rest/api/azureresourcegraph/resourcegraph/resources/resources?view=rest-azureresourcegraph-resourcegraph-2024-04-01).
 
