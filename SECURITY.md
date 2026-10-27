@@ -19,13 +19,14 @@ Do not open a public issue for a suspected vulnerability. Use GitHub's private v
 - Use an allowlisted MCP client and review tool calls before execution in high-impact environments.
 - Do not expose secrets through MCP arguments, query text, logs, command-line arguments, or committed configuration.
 - Pin container images by digest, run as non-root with a read-only filesystem, drop Linux capabilities, and deny privilege escalation.
-- Restrict outbound network access to Microsoft Entra ID, Azure Resource Manager, and the Azure Monitor query endpoint required by the selected cloud.
+- Restrict outbound network access to Microsoft Entra ID, Azure Resource Manager, and the Log Analytics query endpoint of the cloud set in `AZURE_QUERY_MCP_CLOUD` (public cloud by default).
+- Leave `AZURE_QUERY_MCP_ALLOW_CROSS_RESOURCE` unset unless queries must read beyond the workspace they are sent to. When it is set, a single query can join data from every workspace, application, ADX cluster and Resource Graph scope the identity can read.
 - Retain Azure activity and sign-in logs, but do not log query results or access tokens.
 - Run `npm ci`, `npm run check`, and `npm audit --omit=dev` for every release.
 
 ## Trust boundaries and residual risks
 
-The server executes user-supplied read-only query text under the caller's Azure identity. Read-only access can still disclose sensitive resource metadata or log content. Query policy reduces accidental misuse but is not a substitute for least-privilege RBAC, network controls, data classification, and review of the connected MCP client.
+The server executes user-supplied read-only query text under the caller's Azure identity. Read-only access can still disclose sensitive resource metadata or log content. Log fields such as command lines, email subjects and alert descriptions can be attacker-controlled and are returned to the model as-is; treat them as untrusted data, and be careful which other tools share a session with this server. Query policy reduces accidental misuse but is not a substitute for least-privilege RBAC, network controls, data classification, and review of the connected MCP client.
 
 Azure Resource Graph can return resource properties and tags that contain sensitive values. Avoid storing secrets in tags or resource metadata. Log Analytics data may contain personal or security-sensitive records. Scope identities and workspaces accordingly.
 

@@ -28,13 +28,14 @@ test("the plugin runs exactly this package version through npx", () => {
   assert.deepEqual(server.args, ["-y", `${pkg.name}@${pkg.version}`]);
 });
 
-test("every user_config reference is declared with an empty default", () => {
+test("every user_config reference is declared with a default the server reads as unset", () => {
   const server = plugin.mcpServers["azure-query"];
   const references = Object.values(server?.env ?? {}).flatMap((value) => [...value.matchAll(/\$\{user_config\.(\w+)\}/g)].map((match) => match[1] ?? ""));
   assert.ok(references.length > 0);
   for (const key of references) {
-    // Unset options reach the server as empty strings, which it treats as "not configured".
-    assert.equal(plugin.userConfig?.[key]?.default, "", `${key} must be declared with default ""`);
+    // Unset options reach the server as "" (strings) or "false" (booleans); it treats both as not configured.
+    const fallback = plugin.userConfig?.[key]?.default;
+    assert.ok(fallback === "" || fallback === false, `${key} must default to "" or false`);
   }
 });
 

@@ -44,13 +44,14 @@ export function safeErrorMessage(error: unknown) {
     return azureMessage;
   }
 
-  const safeMessages = /^(?:KQL query|Only read-only KQL|The evaluate plugin|Entity value|Hunting query|Azure Resource Graph query|Only read-only Azure Resource Graph|workspaceResourceId|Azure authentication did not return|Azure Resource Graph request failed with HTTP|Azure Resource Graph response exceeds)/;
+  const safeMessages = /^(?:KQL query|Only read-only KQL|The evaluate plugin|Entity value|Hunting query|workspaceId|Timespan|Cross-resource|Azure Resource Graph query|Only read-only Azure Resource Graph|workspaceResourceId|Azure authentication did not return|Azure Resource Graph request failed with HTTP|Azure Resource Graph response exceeds)/;
   return safeMessages.test(error.message) ? error.message : genericFailure;
 }
 
-const workspaceIdSchema = z.string().uuid().describe("Log Analytics workspace customer ID (from list_workspaces).");
+const workspaceIdSchema = z.string().min(1).max(512).describe("Workspace ID (GUID) or the workspace's full ARM resource ID; list_workspaces returns both.");
+const timespanHelp = "ISO 8601 duration back from now (P7D, PT12H), or an interval: start/end (2026-10-01T00:00:00Z/2026-10-02T00:00:00Z) or start/duration (2026-10-01T08:00:00Z/PT6H). Times need Z or an offset.";
 const timespanSchema = (fallback: string) =>
-  z.string().regex(/^P(?!$).+/).max(100).default(fallback).describe(`ISO 8601 lookback, such as P7D or PT12H. Default ${fallback}.`);
+  z.string().min(1).max(100).default(fallback).describe(`${timespanHelp} Default ${fallback}.`);
 
 export function createServer(
   logAnalyticsService = new LogAnalyticsService(),
@@ -68,9 +69,9 @@ export function createServer(
       }),
       annotations: readOnlyAnnotations,
     },
-    async ({ subscriptionId }) => {
+    async ({ subscriptionId }, ctx) => {
       try {
-        return toolResult(await logAnalyticsService.listWorkspaces(subscriptionId));
+        return toolResult(await logAnalyticsService.listWorkspaces(subscriptionId, ctx.mcpReq.signal));
       } catch (error) {
         return toolError(error);
       }
@@ -87,9 +88,9 @@ export function createServer(
       }),
       annotations: readOnlyAnnotations,
     },
-    async ({ workspaceResourceId, search }) => {
+    async ({ workspaceResourceId, search }, ctx) => {
       try {
-        return toolResult(await logAnalyticsService.searchTables(workspaceResourceId, search));
+        return toolResult(await logAnalyticsService.searchTables(workspaceResourceId, search, ctx.mcpReq.signal));
       } catch (error) {
         return toolError(error);
       }
@@ -106,9 +107,9 @@ export function createServer(
       }),
       annotations: readOnlyAnnotations,
     },
-    async ({ workspaceResourceId, tableName }) => {
+    async ({ workspaceResourceId, tableName }, ctx) => {
       try {
-        return toolResult(await logAnalyticsService.describeTable(workspaceResourceId, tableName));
+        return toolResult(await logAnalyticsService.describeTable(workspaceResourceId, tableName, ctx.mcpReq.signal));
       } catch (error) {
         return toolError(error);
       }
@@ -120,15 +121,15 @@ export function createServer(
     {
       description: "Use for telemetry, logs, events, metrics, and time-series data stored in a Log Analytics workspace. Run bounded, read-only KQL against one workspace. Do not use for Azure resource inventory or configuration; use query_azure_resources for those.",
       inputSchema: z.object({
-        workspaceId: z.string().uuid().describe("Log Analytics workspace customer ID."),
+        workspaceId: workspaceIdSchema,
         query: z.string().min(1).max(5_000).describe("Read-only KQL with a result-limiting operator."),
-        timespan: z.string().regex(/^P(?!$).+/).max(100).describe("ISO 8601 duration, such as PT1H."),
+        timespan: z.string().min(1).max(100).describe(timespanHelp),
       }),
       annotations: readOnlyAnnotations,
     },
-    async ({ workspaceId, query, timespan }) => {
+    async ({ workspaceId, query, timespan }, ctx) => {
       try {
-        return toolResult(await logAnalyticsService.queryWorkspace(workspaceId, query, timespan));
+        return toolResult(await logAnalyticsService.queryWorkspace(workspaceId, query, timespan, ctx.mcpReq.signal));
       } catch (error) {
         return toolError(error);
       }
@@ -147,9 +148,9 @@ export function createServer(
       }),
       annotations: readOnlyAnnotations,
     },
-    async ({ subscriptionIds, query, maxResults, skipToken }) => {
+    async ({ subscriptionIds, query, maxResults, skipToken }, ctx) => {
       try {
-        return toolResult(await resourceGraphService.queryResources(subscriptionIds, query, maxResults, skipToken));
+        return toolResult(await resourceGraphService.queryResources(subscriptionIds, query, maxResults, skipToken, ctx.mcpReq.signal));
       } catch (error) {
         return toolError(error);
       }
@@ -173,9 +174,9 @@ export function createServer(
       }),
       annotations: readOnlyAnnotations,
     },
-    async ({ workspaceId, timespan, statuses, severities, maxResults }) => {
+    async ({ workspaceId, timespan, statuses, severities, maxResults }, ctx) => {
       try {
-        return toolResult(await socService.listIncidents(workspaceId, timespan, { statuses, severities, maxResults }));
+        return toolResult(await socService.listIncidents(workspaceId, timespan, { statuses, severities, maxResults }, ctx.mcpReq.signal));
       } catch (error) {
         return toolError(error);
       }
@@ -193,9 +194,9 @@ export function createServer(
       }),
       annotations: readOnlyAnnotations,
     },
-    async ({ workspaceId, incidentNumber, timespan }) => {
+    async ({ workspaceId, incidentNumber, timespan }, ctx) => {
       try {
-        return toolResult(await socService.getIncident(workspaceId, incidentNumber, timespan));
+        return toolResult(await socService.getIncident(workspaceId, incidentNumber, timespan, ctx.mcpReq.signal));
       } catch (error) {
         return toolError(error);
       }
@@ -215,9 +216,9 @@ export function createServer(
       }),
       annotations: readOnlyAnnotations,
     },
-    async ({ workspaceId, entityType, entity, timespan, maxEvents }) => {
+    async ({ workspaceId, entityType, entity, timespan, maxEvents }, ctx) => {
       try {
-        return toolResult(await socService.entityTimeline(workspaceId, entityType, entity, timespan, maxEvents));
+        return toolResult(await socService.entityTimeline(workspaceId, entityType, entity, timespan, maxEvents, ctx.mcpReq.signal));
       } catch (error) {
         return toolError(error);
       }
@@ -230,14 +231,14 @@ export function createServer(
       description: "Check whether log data is still arriving: per-table last-seen time, 24h volume versus the previous daily average, stale tables, volume drops or spikes, and ingestion latency over the last hour.",
       inputSchema: z.object({
         workspaceId: workspaceIdSchema,
-        timespan: timespanSchema("P7D"),
+        timespan: z.string().regex(/^P(?!$).+/).max(100).default("P7D").describe("ISO 8601 duration back from now, such as P7D. Health is measured against now, so intervals are not accepted. Default P7D."),
         staleAfterHours: z.number().int().min(1).max(168).default(24).describe("Flag a table as Stale when no data arrived for this many hours."),
       }),
       annotations: readOnlyAnnotations,
     },
-    async ({ workspaceId, timespan, staleAfterHours }) => {
+    async ({ workspaceId, timespan, staleAfterHours }, ctx) => {
       try {
-        return toolResult(await socService.checkIngestionHealth(workspaceId, timespan, staleAfterHours));
+        return toolResult(await socService.checkIngestionHealth(workspaceId, timespan, staleAfterHours, ctx.mcpReq.signal));
       } catch (error) {
         return toolError(error);
       }
@@ -265,9 +266,9 @@ export function createServer(
       }),
       annotations: readOnlyAnnotations,
     },
-    async ({ workspaceId, queryId, timespan }) => {
+    async ({ workspaceId, queryId, timespan }, ctx) => {
       try {
-        return toolResult(await socService.runHuntingQuery(workspaceId, queryId, timespan));
+        return toolResult(await socService.runHuntingQuery(workspaceId, queryId, timespan, ctx.mcpReq.signal));
       } catch (error) {
         return toolError(error);
       }
@@ -280,7 +281,7 @@ export function createServer(
       title: "Triage a Sentinel incident",
       description: "Walk through an incident: details, alerts, entity timelines, and a verdict with next steps.",
       argsSchema: z.object({
-        workspaceId: z.string().describe("Log Analytics workspace customer ID."),
+        workspaceId: z.string().describe("Workspace ID (GUID) or full ARM resource ID."),
         incidentNumber: z.string().describe("Sentinel incident number."),
       }),
     },
@@ -308,7 +309,7 @@ export function createServer(
       title: "Is my security data still arriving?",
       description: "Review log ingestion health and explain any stale tables, volume changes or latency.",
       argsSchema: z.object({
-        workspaceId: z.string().describe("Log Analytics workspace customer ID."),
+        workspaceId: z.string().describe("Workspace ID (GUID) or full ARM resource ID."),
       }),
     },
     ({ workspaceId }) => ({

@@ -100,6 +100,8 @@ export function azureErrorMessage(error: Error): string | undefined {
       return "No Azure credential is available. Sign in with az login --tenant <tenant-id>, or configure a managed identity or service principal.";
     case "AuthenticationError":
       return "Azure sign-in failed. Run az login --tenant <tenant-id> again and make sure AZURE_TENANT_ID matches the tenant you signed in to.";
+    case "AbortError":
+      return "The request was cancelled.";
     case "TimeoutError":
       return "The Azure request timed out. Narrow the query or timespan and retry.";
     default:

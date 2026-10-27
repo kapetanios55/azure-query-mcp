@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { validateQuery } from "../src/query-policy.js";
+import { crossResourceAllowed, validateQuery } from "../src/query-policy.js";
 
 test("accepts bounded read-only queries", () => {
   assert.doesNotThrow(() =>
@@ -101,4 +101,39 @@ test("still catches management commands placed after a string literal", () => {
     () => validateQuery('print "harmless" | take 1;\n.drop table SecurityEvent'),
     /read-only/,
   );
+});
+
+test("blocks cross-resource functions unless they are allowed", () => {
+  const queries = [
+    "workspace('other-ws').SecurityEvent | take 10",
+    "union SigninLogs, app('my-app').requests | take 10",
+    "adx('https://help.kusto.windows.net/Samples').StormEvents | take 10",
+    "arg('').Resources | take 10",
+    "resource('/subscriptions/x/resourceGroups/y').AzureActivity | take 10",
+    "cluster('c').database('d').T | take 10",
+  ];
+  for (const query of queries) {
+    assert.throws(() => validateQuery(query, { maxLength: 5_000, requireResultLimit: true, allowCrossResource: false }), /^Error: Cross-resource query functions/, query);
+    assert.doesNotThrow(() => validateQuery(query, { maxLength: 5_000, requireResultLimit: true, allowCrossResource: true }), query);
+  }
+});
+
+test("does not mistake similar names or strings for cross-resource functions", () => {
+  const options = { maxLength: 5_000, requireResultLimit: true, allowCrossResource: false };
+  for (const query of [
+    "SigninLogs | summarize arg_max(TimeGenerated, *) by UserPrincipalName | take 10",
+    'AzureActivity | where ResourceProviderValue has "workspace(" | take 10',
+    "AzureDiagnostics | project Resource, ResourceGroup | take 10",
+  ]) {
+    assert.doesNotThrow(() => validateQuery(query, options), query);
+  }
+});
+
+test("reads AZURE_QUERY_MCP_ALLOW_CROSS_RESOURCE when the option is not given", () => {
+  assert.equal(crossResourceAllowed(undefined), false);
+  assert.equal(crossResourceAllowed("false"), false);
+  assert.equal(crossResourceAllowed(""), false);
+  for (const value of ["true", "TRUE", "1", "yes"]) {
+    assert.equal(crossResourceAllowed(value), true, value);
+  }
 });

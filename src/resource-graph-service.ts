@@ -1,11 +1,10 @@
 import type { AccessToken, TokenCredential } from "@azure/core-auth";
 
 import { httpFailureMessage } from "./azure-errors.js";
-import { createDefaultCredential } from "./azure-service.js";
+import { defaultCloud, defaultCredential } from "./azure-service.js";
+import type { AzureCloud } from "./cloud.js";
 import { validateResourceGraphQuery } from "./resource-graph-policy.js";
 
-const resourceGraphEndpoint = "https://management.azure.com/providers/Microsoft.ResourceGraph/resources?api-version=2024-04-01";
-const armScope = "https://management.azure.com/.default";
 const requestTimeoutMs = 30_000;
 const maxResponseBytes = 5 * 1024 * 1024;
 const maxErrorBodyCharacters = 64 * 1024;
@@ -22,25 +21,33 @@ interface ResourceGraphResponse {
 }
 
 export class ResourceGraphService {
+  readonly #endpoint: string;
+  readonly #scope: string;
+
   constructor(
-    private readonly credential: TokenCredential = createDefaultCredential(),
+    private readonly credential: TokenCredential = defaultCredential(),
     private readonly fetch: Fetch = globalThis.fetch,
-  ) {}
+    cloud: AzureCloud = defaultCloud(),
+  ) {
+    this.#endpoint = `${cloud.resourceManager}/providers/Microsoft.ResourceGraph/resources?api-version=2024-04-01`;
+    this.#scope = `${cloud.resourceManager}/.default`;
+  }
 
   async queryResources(
     subscriptionIds: string[],
     query: string,
     maxResults = 100,
     skipToken?: string,
+    signal?: AbortSignal,
   ) {
     validateResourceGraphQuery(query);
-    const token = await this.credential.getToken(armScope);
+    const token = await this.credential.getToken(this.#scope, signal ? { abortSignal: signal } : {});
 
     if (!token) {
       throw new Error("Azure authentication did not return an access token.");
     }
 
-    const response = await this.fetch(resourceGraphEndpoint, {
+    const response = await this.fetch(this.#endpoint, {
       method: "POST",
       headers: {
         Authorization: authorizationHeader(token),
@@ -55,7 +62,7 @@ export class ResourceGraphService {
           ...(skipToken ? { $skipToken: skipToken } : {}),
         },
       }),
-      signal: AbortSignal.timeout(requestTimeoutMs),
+      signal: signal ? AbortSignal.any([AbortSignal.timeout(requestTimeoutMs), signal]) : AbortSignal.timeout(requestTimeoutMs),
     });
 
     if (!response.ok) {

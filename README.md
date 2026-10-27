@@ -28,18 +28,19 @@ Use it when an MCP client needs both of these Azure data planes:
 | Is security data still arriving? Stale tables, volume drops, latency | `check_ingestion_health` | `Usage` plus a one-hour latency sample |
 | Run curated threat hunts | `list_hunting_queries`, `run_hunting_query` | Built-in library plus your own JSON hunts |
 
-ARG describes Azure control-plane resources and can be slightly delayed. It does not contain workspace log records. Log Analytics queries require a workspace customer ID and an ISO 8601 timespan.
+ARG describes Azure control-plane resources and can be slightly delayed. It does not contain workspace log records. Log Analytics tools take the workspace ID (GUID) or its full ARM resource ID, and a timespan: an ISO 8601 duration back from now (`P7D`) or an absolute interval (`2026-10-01T00:00:00Z/2026-10-02T00:00:00Z`).
 
 ## Security properties
 
 - All tools are marked read-only, non-destructive, and idempotent.
-- ARG calls a fixed Microsoft endpoint with API version `2024-04-01`; users cannot control the URL.
+- ARG calls the selected cloud's fixed Resource Manager endpoint with API version `2024-04-01`; users cannot control the URL.
 - ARG requires explicit subscription scope and caps each page at 1,000 rows and 5 MiB.
 - Log Analytics requires bounded KQL and caps output at 1,000 rows and 2,000 characters per cell.
 - The read-only query policy ignores string literals and comments, so hunting filters such as `where OperationName has "delete"` are allowed while real management commands, `set` statements and `externaldata` are rejected. Malformed (unterminated) strings fail closed.
+- Each Log Analytics query reads only the workspace it is sent to. The cross-resource functions `workspace()`, `app()`, `resource()`, `adx()`, `arg()`, `cluster()` and `database()` are rejected unless `AZURE_QUERY_MCP_ALLOW_CROSS_RESOURCE=true`. Azure RBAC still applies either way; this keeps a query from reaching data the user did not point it at.
 - `evaluate` is limited to plugins that only reshape returned rows: `autocluster`, `bag_unpack`, `basket`, `diffpatterns`, `ipv4_lookup`, `ipv6_lookup`, `narrow`, `pivot` and `preview`. Plugins that reach outside the workspace (`http_request`, `sql_request`, `python`, `r`, ...) are blocked.
 - Releases are published from GitHub Actions with npm provenance, so each package version is traceable to the commit and workflow that built it.
-- Requests time out and access tokens are never logged.
+- Requests time out, a cancelled tool call aborts its Azure requests, and access tokens are never logged.
 - When Azure rejects a query (HTTP 400), the tool returns the service's explanation, such as `SEM0100: Failed to resolve column`, so the client can fix the query. Every other Azure failure returns only the HTTP status, the Azure error code and a fix hint, never the upstream message, which can contain tenant IDs, object IDs and scopes.
 - Authentication and authorization are delegated to Microsoft Entra ID and Azure RBAC.
 
@@ -126,7 +127,7 @@ Custom roles can be narrower. The effective permissions must include the relevan
    /plugin install azure-query@azure-query-mcp
    ```
 
-   Claude Code asks for two optional settings: the Entra tenant ID (leave empty to use your `az login` tenant) and a hunting-query folder. Change them later with `/plugin configure azure-query@azure-query-mcp`. Each plugin version runs the exact npm release it was tested with.
+   Claude Code asks for optional settings: the Entra tenant ID (leave empty to use your `az login` tenant), a hunting-query folder, the Azure cloud, and whether to allow cross-resource queries (see [Configuration](#configuration)). Change them later with `/plugin configure azure-query@azure-query-mcp`. Each plugin version runs the exact npm release it was tested with.
 
    To add only the MCP server, without the skill:
 
@@ -145,6 +146,29 @@ Custom roles can be narrower. The effective permissions must include the relevan
 For production, use managed identity or workload identity. Avoid client secrets when the hosting platform supports federation.
 
 Never place `AZURE_CLIENT_SECRET` directly in a committed MCP configuration. Use the host's secret store or managed identity.
+
+## Configuration
+
+All settings are environment variables on the MCP server process. The Claude Code plugin sets the first four from its settings.
+
+| Variable | Default | Effect |
+| --- | --- | --- |
+| `AZURE_TENANT_ID` | Tenant of the signed-in identity | Microsoft Entra tenant to authenticate against. |
+| `AZURE_QUERY_MCP_HUNTING_DIR` | None | Folder of your own hunting queries; see [Your own hunting queries](#your-own-hunting-queries). |
+| `AZURE_QUERY_MCP_CLOUD` | `AzurePublicCloud` | `AzurePublicCloud`, `AzureUSGovernment` or `AzureChinaCloud` (the `az cloud list` names also work). An unknown value stops the server instead of falling back to the public cloud. |
+| `AZURE_QUERY_MCP_ALLOW_CROSS_RESOURCE` | `false` | `true` lets queries use `workspace()`, `app()`, `resource()`, `adx()`, `arg()`, `cluster()` and `database()`. |
+| `AZURE_TOKEN_CREDENTIALS` | All credentials | `prod` excludes developer credentials from `DefaultAzureCredential`; see [SECURITY.md](SECURITY.md). |
+
+### Azure Government and Azure China
+
+Set `AZURE_QUERY_MCP_CLOUD` and point Azure CLI at the same cloud before signing in, because the CLI credential uses the CLI's own cloud setting:
+
+```bash
+az cloud set --name AzureUSGovernment
+az login --tenant <tenant-id>
+```
+
+Resource Manager, Resource Graph, Log Analytics and the token authority then all use that cloud's endpoints.
 
 ## Agent skill
 
@@ -238,11 +262,13 @@ query: Heartbeat | project TimeGenerated, Computer | take 50
 timespan: PT1H
 ```
 
+`workspaceId` also accepts the workspace's full ARM resource ID, which the server resolves to its workspace ID once. `timespan` also accepts an absolute interval, for example `2026-10-01T08:00:00Z/PT6H` or `2026-10-01T00:00:00Z/2026-10-02T00:00:00Z`; times need `Z` or an offset.
+
 The remaining tools discover workspaces and inspect Log Analytics table metadata.
 
 ## Log Analytics examples
 
-The examples below use `query_workspace`. Supply the workspace customer ID and an explicit ISO 8601 timespan with every request. Table availability depends on the workspace configuration.
+The examples below use `query_workspace`. Supply the workspace and an explicit timespan with every request. Table availability depends on the workspace configuration.
 
 ### Agent heartbeat recency
 
@@ -380,6 +406,9 @@ Important: this identifies candidate exposure in configured custom NSG rules. It
 | Workspace metadata works but queries fail | Verify Log Analytics Reader access to the workspace and confirm the workspace customer ID. |
 | Table not found | Run `search_tables`, then query the exact returned table name. |
 | `list_hunting_queries` reports that `AZURE_QUERY_MCP_HUNTING_DIR` could not be read | Check that the path exists and is readable by the user running the MCP client, then restart the server. |
+| `Cross-resource query functions ... are disabled` | Query one workspace per call, or set `AZURE_QUERY_MCP_ALLOW_CROSS_RESOURCE=true` if reading other workspaces or clusters is intended. |
+| `Timespan '...' is not valid` | Use a duration (`P7D`) or an interval with explicit zones (`2026-10-01T00:00:00Z/P1D`). `check_ingestion_health` accepts durations only. |
+| Sign-in or 401 errors in Azure Government or Azure China | Check that `AZURE_QUERY_MCP_CLOUD` and `az cloud show` name the same cloud, then sign in again. |
 | Query rejected as unbounded | Add `take`, `limit`, `top`, `summarize`, or `count` as appropriate. |
 | Server is not visible in VS Code | Check that `npx` is on the PATH VS Code uses (or, from source, run `npm run build` and verify the absolute `dist/index.js` path), then restart the MCP server or reload VS Code. |
 | `evaluate` plugin rejected | Only row-reshaping plugins are allowed; see [Security properties](#security-properties) for the list. |

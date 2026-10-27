@@ -17,7 +17,9 @@
       "args": ["-y", "@akapetaniou/azure-query-mcp@0.5.0"],
       "env": {
         "AZURE_TENANT_ID": "${user_config.tenant_id}",
-        "AZURE_QUERY_MCP_HUNTING_DIR": "${user_config.hunting_dir}"
+        "AZURE_QUERY_MCP_HUNTING_DIR": "${user_config.hunting_dir}",
+        "AZURE_QUERY_MCP_CLOUD": "${user_config.cloud}",
+        "AZURE_QUERY_MCP_ALLOW_CROSS_RESOURCE": "${user_config.allow_cross_resource}"
       }
     }
   },
@@ -33,6 +35,18 @@
       "title": "Hunting query folder (optional)",
       "description": "Folder of SentinelCBContent-format JSON hunting queries to load alongside the built-in hunts. Leave empty for the built-in hunts only.",
       "default": ""
+    },
+    "cloud": {
+      "type": "string",
+      "title": "Azure cloud (optional)",
+      "description": "AzurePublicCloud, AzureUSGovernment or AzureChinaCloud. Leave empty for the public cloud. With az login, also run az cloud set --name <cloud> first.",
+      "default": ""
+    },
+    "allow_cross_resource": {
+      "type": "boolean",
+      "title": "Allow cross-resource queries",
+      "description": "Let queries use workspace(), app(), resource(), adx() and arg() to read beyond the workspace they are sent to. Off by default.",
+      "default": false
     }
   }
 }

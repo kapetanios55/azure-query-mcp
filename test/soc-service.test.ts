@@ -174,3 +174,34 @@ test("every built-in hunting query passes the read-only policy", () => {
     assert.ok(hunt.techniques.every((technique) => /^T\d{4}$/.test(technique)), hunt.id);
   }
 });
+
+test("check_ingestion_health accepts only durations back from now", async () => {
+  const { runner, calls } = fakeRunner([]);
+  const service = new SocService(runner, new HuntingLibrary(""));
+  await assert.rejects(
+    service.checkIngestionHealth(workspaceId, "2026-10-01T00:00:00Z/2026-10-02T00:00:00Z", 24),
+    /^Error: Timespan for check_ingestion_health must be a duration/,
+  );
+  assert.equal(calls.length, 0);
+});
+
+test("SOC tools pass the tool call's abort signal to every query", async () => {
+  const signals: Array<AbortSignal | undefined> = [];
+  const runner: WorkspaceQueryRunner = {
+    async runQuery(_workspace, _query, _timespan, _policy, signal) {
+      signals.push(signal);
+      return { status: LogsQueryResultStatus.Success, tables: [table([], [])] };
+    },
+  };
+  const service = new SocService(runner, new HuntingLibrary(""));
+  const { signal } = new AbortController();
+
+  await service.listIncidents(workspaceId, "P7D", { maxResults: 5 }, signal);
+  await service.entityTimeline(workspaceId, "ip", "203.0.113.7", "P1D", 10, signal);
+  await service.checkIngestionHealth(workspaceId, "P7D", 24, signal);
+  await service.runHuntingQuery(workspaceId, "password-spray", "P1D", signal);
+
+  // One query for incidents, two each for the timeline and health, one for the hunt.
+  assert.equal(signals.length, 6);
+  assert.ok(signals.every((received) => received === signal));
+});
