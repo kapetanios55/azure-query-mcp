@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
 
+import { azureErrorMessage, genericFailure } from "./azure-errors.js";
 import { LogAnalyticsService } from "./azure-service.js";
 import { ResourceGraphService } from "./resource-graph-service.js";
 import { incidentSeverities, incidentStatuses } from "./soc-queries.js";
@@ -18,9 +19,10 @@ const readOnlyAnnotations = {
   openWorldHint: true,
 };
 
+// Compact JSON: indentation roughly doubles the tokens a 1,000-row result costs the client.
 function toolResult(value: unknown) {
   return {
-    content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }],
+    content: [{ type: "text" as const, text: JSON.stringify(value) }],
   };
 }
 
@@ -33,13 +35,17 @@ function toolError(error: unknown) {
 
 export function safeErrorMessage(error: unknown) {
   if (!(error instanceof Error)) {
-    return "Request failed. Verify the inputs, Azure authentication, RBAC, and service availability.";
+    return genericFailure;
+  }
+
+  // Azure SDK and credential errors carry upstream text, so they never reach the prefix allowlist.
+  const azureMessage = azureErrorMessage(error);
+  if (azureMessage) {
+    return azureMessage;
   }
 
   const safeMessages = /^(?:KQL query|Only read-only KQL|The evaluate plugin|Entity value|Hunting query|Azure Resource Graph query|Only read-only Azure Resource Graph|workspaceResourceId|Azure authentication did not return|Azure Resource Graph request failed with HTTP|Azure Resource Graph response exceeds)/;
-  return safeMessages.test(error.message)
-    ? error.message
-    : "Request failed. Verify the inputs, Azure authentication, RBAC, and service availability.";
+  return safeMessages.test(error.message) ? error.message : genericFailure;
 }
 
 const workspaceIdSchema = z.string().uuid().describe("Log Analytics workspace customer ID (from list_workspaces).");

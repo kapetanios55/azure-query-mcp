@@ -1,5 +1,6 @@
 import type { AccessToken, TokenCredential } from "@azure/core-auth";
 
+import { httpFailureMessage } from "./azure-errors.js";
 import { createDefaultCredential } from "./azure-service.js";
 import { validateResourceGraphQuery } from "./resource-graph-policy.js";
 
@@ -7,6 +8,7 @@ const resourceGraphEndpoint = "https://management.azure.com/providers/Microsoft.
 const armScope = "https://management.azure.com/.default";
 const requestTimeoutMs = 30_000;
 const maxResponseBytes = 5 * 1024 * 1024;
+const maxErrorBodyCharacters = 64 * 1024;
 
 type Fetch = typeof globalThis.fetch;
 
@@ -57,7 +59,8 @@ export class ResourceGraphService {
     });
 
     if (!response.ok) {
-      throw new Error(`Azure Resource Graph request failed with HTTP ${response.status}.`);
+      // httpFailureMessage passes through only the query error detail of a 400, never other bodies.
+      throw new Error(httpFailureMessage("Azure Resource Graph request failed", response.status, await errorBody(response)));
     }
 
     const contentLength = Number(response.headers.get("content-length"));
@@ -79,6 +82,15 @@ export class ResourceGraphService {
       facets: result.facets ?? [],
       ...(result.$skipToken ? { skipToken: result.$skipToken } : {}),
     };
+  }
+}
+
+async function errorBody(response: Response): Promise<unknown> {
+  try {
+    const body = await response.text();
+    return body.length <= maxErrorBodyCharacters ? JSON.parse(body) : undefined;
+  } catch {
+    return undefined;
   }
 }
 

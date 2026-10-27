@@ -13,7 +13,7 @@ import { parseWorkspaceResourceId } from "./workspace-id.js";
 export interface WorkspaceQueryResult {
   status: LogsQueryResultStatus;
   tables: ShapedTable[];
-  statistics?: unknown;
+  executionTimeSeconds?: number;
   partialError?: unknown;
 }
 
@@ -140,11 +140,14 @@ export class LogAnalyticsService implements WorkspaceQueryRunner {
     const tables = result.status === LogsQueryResultStatus.PartialFailure
       ? result.partialTables
       : result.tables;
+    // Only the execution time is useful to a client; the rest of the statistics payload
+    // (resource usage, per-dataset counters) is large and costs tokens on every call.
+    const executionTime: unknown = result.statistics?.query?.executionTime;
 
     return {
       status: result.status,
       tables: tables.map((table) => shapeTable(table)),
-      statistics: result.statistics,
+      ...(typeof executionTime === "number" ? { executionTimeSeconds: executionTime } : {}),
       ...(result.status === LogsQueryResultStatus.PartialFailure
         ? { partialError: result.partialError }
         : {}),

@@ -39,7 +39,8 @@ ARG describes Azure control-plane resources and can be slightly delayed. It does
 - The read-only query policy ignores string literals and comments, so hunting filters such as `where OperationName has "delete"` are allowed while real management commands, `set` statements and `externaldata` are rejected. Malformed (unterminated) strings fail closed.
 - `evaluate` is limited to plugins that only reshape returned rows: `autocluster`, `bag_unpack`, `basket`, `diffpatterns`, `ipv4_lookup`, `ipv6_lookup`, `narrow`, `pivot` and `preview`. Plugins that reach outside the workspace (`http_request`, `sql_request`, `python`, `r`, ...) are blocked.
 - Releases are published from GitHub Actions with npm provenance, so each package version is traceable to the commit and workflow that built it.
-- Requests time out, upstream ARG error bodies are not returned, and access tokens are never logged.
+- Requests time out and access tokens are never logged.
+- When Azure rejects a query (HTTP 400), the tool returns the service's explanation, such as `SEM0100: Failed to resolve column`, so the client can fix the query. Every other Azure failure returns only the HTTP status, the Azure error code and a fix hint, never the upstream message, which can contain tenant IDs, object IDs and scopes.
 - Authentication and authorization are delegated to Microsoft Entra ID and Azure RBAC.
 
 See [SECURITY.md](SECURITY.md) before production deployment.
@@ -165,7 +166,7 @@ Entity values are validated against strict UPN, IP and hostname formats before t
 
 ### Your own hunting queries
 
-Set `AZURE_QUERY_MCP_HUNTING_DIR` to a folder of JSON hunting queries in the [SentinelCBContent](https://github.com/kapetanios55/SentinelCBContent) format (`id`, `name`, `description`, `tactics`, `techniques`, `query`). Each file must pass the read-only policy; files that do not are reported by `list_hunting_queries` and not loaded.
+Set `AZURE_QUERY_MCP_HUNTING_DIR` to a folder of JSON hunting queries in the [SentinelCBContent](https://github.com/kapetanios55/SentinelCBContent) format (`id`, `name`, `description`, `tactics`, `techniques`, `query`). Each file must pass the read-only policy; files that do not are reported by `list_hunting_queries` and not loaded. An unreadable directory is reported the same way and the built-in hunts still load.
 
 ```json
 "env": {
@@ -189,7 +190,7 @@ The test suite parses and semantically analyses every built-in query with Micros
 
 ### `query_azure_resources`
 
-Runs read-only ARG KQL against one or more explicitly supplied subscription IDs. The query must begin with a supported ARG table such as `Resources`.
+Runs read-only ARG KQL against one or more explicitly supplied subscription IDs. The query must begin with an ARG table such as `Resources`, `ResourceContainers`, `ResourceChanges` or `AuthorizationResources`.
 
 ```text
 subscriptionIds: ["00000000-0000-4000-8000-000000000000"]
@@ -350,6 +351,7 @@ Important: this identifies candidate exposure in configured custom NSG rules. It
 | `AuthorizationFailed` from ARG | Verify Reader access at the requested subscription or resource scope. |
 | Workspace metadata works but queries fail | Verify Log Analytics Reader access to the workspace and confirm the workspace customer ID. |
 | Table not found | Run `search_tables`, then query the exact returned table name. |
+| `list_hunting_queries` reports that `AZURE_QUERY_MCP_HUNTING_DIR` could not be read | Check that the path exists and is readable by the user running the MCP client, then restart the server. |
 | Query rejected as unbounded | Add `take`, `limit`, `top`, `summarize`, or `count` as appropriate. |
 | Server is not visible in VS Code | Check that `npx` is on the PATH VS Code uses (or, from source, run `npm run build` and verify the absolute `dist/index.js` path), then restart the MCP server or reload VS Code. |
 | `evaluate` plugin rejected | Only row-reshaping plugins are allowed; see [Security properties](#security-properties) for the list. |
