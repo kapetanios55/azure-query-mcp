@@ -131,6 +131,19 @@ For production, use managed identity or workload identity. Avoid client secrets 
 
 Never place `AZURE_CLIENT_SECRET` directly in a committed MCP configuration. Use the host's secret store or managed identity.
 
+## Agent skill
+
+[`skills/azure-query`](skills/azure-query/SKILL.md) is an [Agent Skills](https://agentskills.io) skill that teaches an agent when and how to use this server. It covers which tool fits which question, the two workspace IDs, the KQL rules the server enforces, what each error means, SOC workflows, and safety rules: treat log content as untrusted, stay in the requested scope, and pull only the data needed. Its reference files contain tested example queries for Log Analytics and Resource Graph.
+
+The skill does not replace the MCP server; install both. For Claude Code, copy the folder into your personal or project skills directory:
+
+```bash
+git clone --depth 1 https://github.com/kapetanios55/azure-query-mcp.git
+cp -r azure-query-mcp/skills/azure-query ~/.claude/skills/   # or <project>/.claude/skills/
+```
+
+Other agents that support Agent Skills load the same folder from their own skills directory. The test suite validates the skill's frontmatter, checks that it documents every tool and prompt, and runs each example query through the read-only policy (and, for Log Analytics, Microsoft's Kusto analyzer against the official table schemas).
+
 ## Run from source
 
 To work on the server itself, clone and build it, then point your MCP client at `dist/index.js` instead of `npx`:
