@@ -67,9 +67,11 @@ test("uses the US Government endpoints and token scopes, resolving a resource ID
   const queries = requests.filter((request) => request.method === "POST");
   assert.equal(queries.length, 2);
   assert.equal(queries[0]?.url, `https://api.loganalytics.us/v1/workspaces/${workspaceGuid}/query`);
-  assert.ok(scopes.includes("https://management.usgovcloudapi.net/.default"));
-  assert.ok(scopes.includes("https://api.loganalytics.us/.default"));
-  assert.ok(!scopes.some((scope) => scope.includes("azure.com") || scope.includes("loganalytics.io")), "no public-cloud scope is requested");
+  // Exactly the two US Government scopes: no public-cloud scope is ever requested.
+  assert.deepEqual(
+    [...new Set(scopes)].sort(),
+    ["https://api.loganalytics.us/.default", "https://management.usgovcloudapi.net/.default"],
+  );
 });
 
 test("queries a workspace GUID directly and sends an absolute interval", async () => {
