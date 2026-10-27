@@ -35,16 +35,48 @@ test("sends a scoped and bounded Resource Graph REST request", async () => {
   assert.deepEqual(result.data, [{ name: "vm" }]);
 });
 
-test("does not expose Azure error response bodies", async () => {
-  const fetch = async () => new Response("sensitive upstream details", { status: 403 });
+test("does not expose Azure error response bodies for authorization failures", async () => {
+  const fetch = async () => Response.json({
+    error: { code: "AuthorizationFailed", message: "The client 'sensitive-object-id' with tenant 11111111-1111-1111-1111-111111111111 has no access." },
+  }, { status: 403 });
   const service = new ResourceGraphService(credential, fetch);
 
   await assert.rejects(
-    service.queryResources(
-      ["00000000-0000-4000-8000-000000000000"],
-      "Resources | limit 1",
-    ),
-    /^Error: Azure Resource Graph request failed with HTTP 403\.$/,
+    service.queryResources(["00000000-0000-4000-8000-000000000000"], "Resources | limit 1"),
+    (error: Error) => {
+      assert.match(error.message, /^Azure Resource Graph request failed with HTTP 403 \(AuthorizationFailed\)\. .*Reader on the subscription/);
+      assert.doesNotMatch(error.message, /sensitive-object-id|11111111/);
+      return true;
+    },
+  );
+});
+
+test("ignores non-JSON error bodies", async () => {
+  const fetch = async () => new Response("sensitive upstream details", { status: 400 });
+  const service = new ResourceGraphService(credential, fetch);
+
+  await assert.rejects(
+    service.queryResources(["00000000-0000-4000-8000-000000000000"], "Resources | limit 1"),
+    /^Error: Azure Resource Graph request failed with HTTP 400\.$/,
+  );
+});
+
+test("explains why ARG rejected a query", async () => {
+  const fetch = async () => Response.json({
+    error: {
+      code: "BadRequest",
+      message: "Please provide below info when asking for support: timestamp = 2026-10-27T10:00:00Z, correlationId = abc.",
+      details: [
+        { code: "InvalidQuery", message: "Query is invalid. Please refer to the documentation for the Azure Resource Graph service and fix the error before retrying." },
+        { code: "UnknownFunction", message: "Unknown function: 'tolowr'." },
+      ],
+    },
+  }, { status: 400 });
+  const service = new ResourceGraphService(credential, fetch);
+
+  await assert.rejects(
+    service.queryResources(["00000000-0000-4000-8000-000000000000"], "Resources | extend n = tolowr(name) | limit 1"),
+    /^Error: Azure Resource Graph request failed with HTTP 400 \(UnknownFunction\): Query is invalid\..* Unknown function: 'tolowr'\.$/,
   );
 });
 

@@ -2,7 +2,11 @@ import { stripLiteralsAndComments } from "./kql-lexer.js";
 
 const managementCommands = /^\s*\./m;
 const disallowedOperators = /\b(?:evaluate|externaldata|external_data|ingest|set|append|drop|delete|purge)\b/i;
-const allowedTables = /^(?:resources|resourcecontainers|advisorresources|authorizationresources|chaosresources|desktopvirtualizationresources|extendedlocationresources|guestconfigurationresources|healthresources|iotsecurityresources|kubernetesconfigurationresources|maintenanceresources|networkresources|patchassessmentresources|patchinstallationresources|policyresources|recoveryservicesresources|securityresources|servicehealthresources|spotresources)\b/i;
+// Every ARG table is named *resources, *resourcechanges, resourcecontainers or
+// resourcecontainerchanges (ResourceChanges, AppServiceResources, ...). Matching the
+// naming scheme keeps new tables working while still catching Log Analytics tables
+// such as Heartbeat sent to the wrong tool. ARG itself rejects unknown tables.
+const allowedTables = /^[a-z]*(?:resources|resourcechanges|resourcecontainers|resourcecontainerchanges)\b/i;
 
 export function validateResourceGraphQuery(query: string): void {
   const trimmedQuery = query.trim();
@@ -19,7 +23,7 @@ export function validateResourceGraphQuery(query: string): void {
   const code = stripLiteralsAndComments(trimmedQuery).trim();
 
   if (!allowedTables.test(code)) {
-    throw new Error("Azure Resource Graph query must start with a supported ARG table.");
+    throw new Error("Azure Resource Graph query must start with a supported ARG table such as Resources, ResourceContainers or ResourceChanges. Query Log Analytics tables with query_workspace.");
   }
 
   if (managementCommands.test(code) || disallowedOperators.test(code)) {

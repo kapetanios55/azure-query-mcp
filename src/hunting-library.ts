@@ -100,7 +100,16 @@ export function loadHuntingDirectory(directory: string): { queries: HuntingQuery
   const queries: HuntingQuery[] = [];
   const errors: string[] = [];
 
-  for (const file of readdirSync(directory).filter((name) => name.endsWith(".json")).sort()) {
+  let files: string[];
+  try {
+    files = readdirSync(directory).filter((name) => name.endsWith(".json")).sort();
+  } catch (error) {
+    // A misconfigured directory must not stop the server; the built-in hunts still load.
+    const code = (error as NodeJS.ErrnoException).code ?? "unreadable";
+    return { queries, errors: [`AZURE_QUERY_MCP_HUNTING_DIR '${directory}' could not be read (${code}).`] };
+  }
+
+  for (const file of files) {
     try {
       const raw = JSON.parse(readFileSync(join(directory, file), "utf8")) as Record<string, unknown>;
       const { id, name, query } = raw;

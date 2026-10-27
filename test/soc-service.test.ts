@@ -160,6 +160,13 @@ test("HuntingLibrary loads SentinelCBContent-format files and rejects unsafe one
   }
 });
 
+test("HuntingLibrary reports an unreadable directory instead of failing startup", () => {
+  const library = new HuntingLibrary(join(tmpdir(), "azure-query-mcp-missing-hunts"));
+  assert.ok(library.list().some((query) => query.id === "password-spray"));
+  assert.equal(library.loadErrors.length, 1);
+  assert.match(library.loadErrors[0] ?? "", /AZURE_QUERY_MCP_HUNTING_DIR .* could not be read \(ENOENT\)/);
+});
+
 test("every built-in hunting query passes the read-only policy", () => {
   assert.ok(builtInHuntingQueries.length >= 5);
   for (const hunt of builtInHuntingQueries) {
