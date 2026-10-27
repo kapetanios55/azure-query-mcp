@@ -5,6 +5,13 @@ const setStatements = /(?:^|;)\s*set\s+\w/i;
 const dangerousOperators = /\b(?:externaldata|external_data|ingest|append|drop|delete|purge)\b/i;
 const evaluatePlugins = /\bevaluate\s+(?:hint\.\w+\s*=\s*\w+\s+)*(\w+)/gi;
 const resultLimit = /\|\s*(?:take|limit|top)\s+\d+\b|\|\s*(?:summarize|count)\b/i;
+// Functions that read another workspace, app, resource, ADX cluster or Resource Graph.
+const crossResourceFunctions = /\b(?:workspace|app|resource|adx|arg|cluster|database)\s*\(/i;
+
+/** AZURE_QUERY_MCP_ALLOW_CROSS_RESOURCE=true lets queries read beyond their workspace. */
+export function crossResourceAllowed(value = process.env.AZURE_QUERY_MCP_ALLOW_CROSS_RESOURCE): boolean {
+  return /^(?:1|true|yes)$/i.test(value?.trim() ?? "");
+}
 
 /**
  * `evaluate` plugins that only reshape or analyse rows the query already returned.
@@ -26,6 +33,8 @@ export const allowedEvaluatePlugins = new Set([
 export interface QueryPolicyOptions {
   maxLength: number;
   requireResultLimit: boolean;
+  /** Defaults to AZURE_QUERY_MCP_ALLOW_CROSS_RESOURCE. */
+  allowCrossResource?: boolean;
 }
 
 const defaultOptions: QueryPolicyOptions = {
@@ -52,6 +61,12 @@ export function validateQuery(
 
   if (managementCommands.test(code) || setStatements.test(code) || dangerousOperators.test(code)) {
     throw new Error("Only read-only KQL queries are supported.");
+  }
+
+  if (!(options.allowCrossResource ?? crossResourceAllowed()) && crossResourceFunctions.test(code)) {
+    throw new Error(
+      "Cross-resource query functions (workspace(), app(), resource(), adx(), arg(), cluster(), database()) are disabled, so each query reads only the workspace it is sent to. Query one workspace at a time, or set AZURE_QUERY_MCP_ALLOW_CROSS_RESOURCE=true to allow them.",
+    );
   }
 
   for (const [, plugin = ""] of code.matchAll(evaluatePlugins)) {

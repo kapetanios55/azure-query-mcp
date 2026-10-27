@@ -100,3 +100,14 @@ test("never passes an Azure SDK message through the validation-message allowlist
   const error = restError(403, "KQL query denied for tenant 11111111-1111-1111-1111-111111111111", { code: "InsufficientAccessError" });
   assert.doesNotMatch(safeErrorMessage(error), /11111111/);
 });
+
+test("reports cancellation and passes the new validation messages through", () => {
+  assert.equal(safeErrorMessage(new DOMException("This operation was aborted", "AbortError")), "The request was cancelled.");
+  for (const message of [
+    "workspaceId must be a Log Analytics workspace ID (GUID) or the workspace's full ARM resource ID; list_workspaces returns both.",
+    "Timespan 'yesterday' is not valid. Use an ISO 8601 duration back from now (P7D, PT12H) or an interval.",
+    "Cross-resource query functions (workspace(), app(), resource(), adx(), arg(), cluster(), database()) are disabled.",
+  ]) {
+    assert.equal(safeErrorMessage(new Error(message)), message);
+  }
+});

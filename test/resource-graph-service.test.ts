@@ -3,6 +3,7 @@ import test from "node:test";
 
 import type { TokenCredential } from "@azure/core-auth";
 
+import { resolveCloud } from "../src/cloud.js";
 import { ResourceGraphService } from "../src/resource-graph-service.js";
 
 const credential: TokenCredential = {
@@ -93,4 +94,44 @@ test("rejects oversized responses before parsing", async () => {
     ),
     /5 MiB safety limit/,
   );
+});
+
+test("uses the selected cloud's Resource Manager endpoint and token scope", async () => {
+  let url = "";
+  const scopes: string[] = [];
+  const recordingCredential: TokenCredential = {
+    async getToken(scope) {
+      scopes.push(...[scope].flat());
+      return { token: "test-token", expiresOnTimestamp: Date.now() + 60_000 };
+    },
+  };
+  const fetch = async (input: string | URL | Request) => {
+    url = String(input);
+    return Response.json({ count: 0, data: [] });
+  };
+  const service = new ResourceGraphService(recordingCredential, fetch, resolveCloud("AzureChinaCloud"));
+
+  await service.queryResources(["00000000-0000-4000-8000-000000000000"], "Resources | limit 1");
+
+  assert.equal(url, "https://management.chinacloudapi.cn/providers/Microsoft.ResourceGraph/resources?api-version=2024-04-01");
+  assert.deepEqual(scopes, ["https://management.chinacloudapi.cn/.default"]);
+});
+
+test("passes cancellation through to the Resource Graph request", async () => {
+  let requestSignal: AbortSignal | undefined;
+  const fetch = async (_input: string | URL | Request, init?: RequestInit) => {
+    requestSignal = init?.signal ?? undefined;
+    return new Promise<Response>((_resolve, reject) => {
+      requestSignal?.addEventListener("abort", () => reject(requestSignal?.reason));
+    });
+  };
+  const service = new ResourceGraphService(credential, fetch);
+  const controller = new AbortController();
+
+  const pending = service.queryResources(["00000000-0000-4000-8000-000000000000"], "Resources | limit 1", 10, undefined, controller.signal);
+  await new Promise((resolve) => setImmediate(resolve));
+  controller.abort();
+
+  await assert.rejects(pending, { name: "AbortError" });
+  assert.ok(requestSignal?.aborted);
 });

@@ -55,6 +55,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@azure/core-rest-pipeline": "^1.25.0",
     "@kusto/language-service-next": "12.4.1",
     "@modelcontextprotocol/client": "^2.4.0",
     "@types/node": "^26.6.5",

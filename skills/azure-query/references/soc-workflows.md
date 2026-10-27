@@ -7,7 +7,7 @@ These tools build their own KQL, validate every input and skip tables the worksp
 1. **Find it.** `list_incidents` with `statuses: ["New", "Active"]` and, if useful, `severities: ["High", "Medium"]`. Results are the latest state of each incident, newest first. Default window `P7D`.
 2. **Read it.** `get_incident` with the `incidentNumber`. The default window is `P30D`; widen it for older incidents. Summarise what fired, when, the MITRE tactics, and the alert providers.
 3. **Pick pivots.** `pivotEntities` lists accounts, IPs and hosts that `entity_timeline` accepts. `unresolvedEntities` lists entities recorded only by display name, SID or Entra object ID: mention them, but they cannot be pivoted on directly.
-4. **Investigate at most three pivots** with `entity_timeline`, using a timespan that covers the incident and a day or two before it. Look for:
+4. **Investigate at most three pivots** with `entity_timeline`, using an interval that covers the incident and a day or two before it, built from the incident's first and last activity times (for example `2026-10-12T00:00:00Z/2026-10-15T00:00:00Z`). Look for:
    - successful sign-ins after a run of failures, or from a new country or IP;
    - MFA prompts denied, then approved;
    - new inbox rules, role assignments, app consents or mailbox permission changes;
