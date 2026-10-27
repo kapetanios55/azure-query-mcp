@@ -113,7 +113,22 @@ Custom roles can be narrower. The effective permissions must include the relevan
    }
    ```
 
-   **Claude Code**:
+   **Claude Code**: install the plugin, which adds the MCP server and the [agent skill](#agent-skill) in one step. In Claude Code (v2.1.275 or later):
+
+   ```text
+   /plugin install azure-query --marketplace kapetanios55/azure-query-mcp
+   ```
+
+   On earlier versions, add the marketplace first, then install from it:
+
+   ```text
+   /plugin marketplace add kapetanios55/azure-query-mcp
+   /plugin install azure-query@azure-query-mcp
+   ```
+
+   Claude Code asks for two optional settings: the Entra tenant ID (leave empty to use your `az login` tenant) and a hunting-query folder. Change them later with `/plugin configure azure-query@azure-query-mcp`. Each plugin version runs the exact npm release it was tested with.
+
+   To add only the MCP server, without the skill:
 
    ```bash
    claude mcp add azure-query --env AZURE_TENANT_ID=<tenant-id> -- npx -y @akapetaniou/azure-query-mcp
@@ -135,7 +150,7 @@ Never place `AZURE_CLIENT_SECRET` directly in a committed MCP configuration. Use
 
 [`skills/azure-query`](skills/azure-query/SKILL.md) is an [Agent Skills](https://agentskills.io) skill that teaches an agent when and how to use this server. It covers which tool fits which question, the two workspace IDs, the KQL rules the server enforces, what each error means, SOC workflows, and safety rules: treat log content as untrusted, stay in the requested scope, and pull only the data needed. Its reference files contain tested example queries for Log Analytics and Resource Graph.
 
-The skill does not replace the MCP server; install both. For Claude Code, copy the folder into your personal or project skills directory:
+The skill does not replace the MCP server; install both. In Claude Code the [plugin](#quick-start) installs both together. To add the skill by hand instead, copy the folder into your personal or project skills directory:
 
 ```bash
 git clone --depth 1 https://github.com/kapetanios55/azure-query-mcp.git
@@ -386,7 +401,7 @@ node scripts/live-smoke-test.mjs . <subscription-id> <workspace-resource-id> <wo
 
 ### Releasing
 
-1. Bump `version` in `package.json` (for example `npm version minor --no-git-tag-version`) and update [CHANGELOG.md](CHANGELOG.md).
+1. Bump `version` in `package.json` (for example `npm version minor --no-git-tag-version`) and update [CHANGELOG.md](CHANGELOG.md). Set the same version in [`.claude-plugin/plugin.json`](.claude-plugin/plugin.json), both its `version` and the `@<version>` pin in the MCP server's `npx` arguments; the test suite fails until all three match. Plugin users receive the new server version only when the plugin version changes.
 2. Merge to `main`, then tag the merge commit: `git tag v0.3.0 && git push origin v0.3.0`.
 3. The [Release workflow](.github/workflows/release.yml) checks that the tag matches `package.json`, runs the full check and audit, and publishes to npm with provenance using trusted publishing (no stored npm token).
 

@@ -1,0 +1,16 @@
+{
+  "name": "azure-query-mcp",
+  "description": "Read-only Azure Log Analytics, Microsoft Sentinel and Azure Resource Graph tools for Claude Code.",
+  "owner": {
+    "name": "Andreas Kapetaniou",
+    "url": "https://github.com/kapetanios55"
+  },
+  "plugins": [
+    {
+      "name": "azure-query",
+      "source": "./",
+      "category": "security",
+      "tags": ["azure", "sentinel", "kql", "soc"]
+    }
+  ]
+}

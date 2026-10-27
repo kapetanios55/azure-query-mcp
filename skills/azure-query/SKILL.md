@@ -9,7 +9,7 @@ compatibility: Requires the azure-query MCP server (npm package @akapetaniou/azu
 
 The azure-query MCP server gives you read-only access to Azure Log Analytics (including Microsoft Sentinel data) and Azure Resource Graph (ARG), under the signed-in user's own Azure RBAC. Nothing you run can change Azure, but results can contain sensitive security and personal data.
 
-Some clients show the tools with a prefix, for example `mcp__azure-query__query_workspace`. If none of the tools below are available, the server is not connected: tell the user to add it (Claude Code: `claude mcp add azure-query --env AZURE_TENANT_ID=<tenant-id> -- npx -y @akapetaniou/azure-query-mcp`, other clients in the project README) and to sign in with `az login --tenant <tenant-id>`. Do not run those commands for them without asking.
+Some clients show the tools with a prefix, for example `mcp__azure-query__query_workspace`, or `mcp__plugin_azure-query_azure-query__query_workspace` when the Claude Code plugin installed them. If none of the tools below are available, the server is not connected: tell the user to add it (Claude Code: `/plugin install azure-query --marketplace kapetanios55/azure-query-mcp`, other clients in the project README) and to sign in with `az login --tenant <tenant-id>`. Do not run those commands for them without asking.
 
 ## Pick the tool
 
