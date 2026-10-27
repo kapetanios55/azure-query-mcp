@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1 (2026-10-27)
+
+- The Claude Code plugin moves to its own `plugin/` folder (manifest, icon, skill and a plugin README), and the marketplace entry points there. Installing the plugin no longer copies the whole repository into the plugin cache, and `/plugin` no longer shows "The packages it lists were not installed". Install commands are unchanged.
+- README: the Claude Code plugin is the recommended install, `npx` examples pin the version, and a "How it works" section states what the server runs and connects to.
+- The server itself is unchanged from 0.6.0.
+
 ## 0.6.0 (2026-10-27)
 
 **Upgrading:** queries and hunting files that use `workspace()`, `app()`, `resource()`, `adx()`, `arg()`, `cluster()` or `database()` now need `AZURE_QUERY_MCP_ALLOW_CROSS_RESOURCE=true` (plugin setting: *Allow cross-resource queries*).

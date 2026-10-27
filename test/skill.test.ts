@@ -9,10 +9,10 @@ import { validateResourceGraphQuery } from "../src/resource-graph-policy.js";
 
 import { semanticErrors } from "./kusto-analyzer.js";
 
-// The agent skill in skills/azure-query documents this server. These tests keep it in
+// The agent skill in plugin/skills/azure-query documents this server. These tests keep it in
 // step with the code: valid Agent Skills frontmatter, every tool and prompt documented,
 // and every example query accepted by the policy it describes.
-const skillDirectory = fileURLToPath(new URL("../skills/azure-query/", import.meta.url));
+const skillDirectory = fileURLToPath(new URL("../plugin/skills/azure-query/", import.meta.url));
 const skillFiles = [
   join(skillDirectory, "SKILL.md"),
   ...readdirSync(join(skillDirectory, "references")).map((file) => join(skillDirectory, "references", file)),
