@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Correction to 0.5.0:** the `@azure/msal-node` override applies only inside this repository. `overrides` in a published package are ignored by npm, so `npx`, the Claude Code plugin and every other install from npm resolve `@azure/msal-node` 6.x, which `npm audit` reports for GHSA-xcx6-jx8p-x3h5 (no fixed 6.x release). The advisory covers the authorization code flow, which this server does not reach; see [SECURITY.md](SECURITY.md#known-dependency-advisories). The other advisories listed for 0.5.0 are fixed for npm installs.
+
 ## 0.6.1 (2026-10-27)
 
 - The Claude Code plugin moves to its own `plugin/` folder (manifest, icon, skill and a plugin README), and the marketplace entry points there. Installing the plugin no longer copies the whole repository into the plugin cache, and `/plugin` no longer shows "The packages it lists were not installed". Install commands are unchanged.
@@ -22,7 +26,7 @@
 
 - Claude Code plugin and marketplace (`.claude-plugin/`): `/plugin install azure-query --marketplace kapetanios55/azure-query-mcp` installs the MCP server, pinned to the matching npm release, together with the agent skill. The tenant ID and hunting-query folder are prompted for as plugin settings. The plugin has an icon (`.claude-plugin/icon.png`).
 - Agent skill `skills/azure-query` (Agent Skills format) that tells agents when and how to use each tool: workspace identifiers, the KQL rules the server enforces, error recovery, SOC workflows and safety rules, with tested example queries for Log Analytics and Resource Graph. CI validates the skill and every example query.
-- Security: update `@modelcontextprotocol/server` to 2.4.0, `zod` to 4.6.7 and `@azure/identity` to 4.14.0, and pin `@azure/msal-node` to 7.1.1 or later through `overrides`, clearing every high-severity `npm audit` finding (GHSA-jm63-cq47-j5jp, GHSA-46jr-4wx8-v453, GHSA-rvq5-wwqv-78pq, GHSA-mrhx-c7xc-m3w5, GHSA-xcx6-jx8p-x3h5).
+- Security: update `@modelcontextprotocol/server` to 2.4.0, `zod` to 4.6.7 and `@azure/identity` to 4.14.0, and pin `@azure/msal-node` to 7.1.1 or later through `overrides`, clearing every high-severity `npm audit` finding in this repository (GHSA-jm63-cq47-j5jp, GHSA-46jr-4wx8-v453, GHSA-rvq5-wwqv-78pq, GHSA-mrhx-c7xc-m3w5, GHSA-xcx6-jx8p-x3h5). Installs from npm do not get the override; see the correction under Unreleased.
 - Query errors are actionable: when Log Analytics, ARM or Resource Graph rejects a request with HTTP 400, the tool returns the most specific service message (for example `SEM0100: 'where' operator: Failed to resolve column ...`) instead of a generic failure. Authentication, authorization, not-found, throttling, network and credential-chain failures return a specific fix hint; upstream messages for those are still withheld.
 - `query_azure_resources` accepts every ARG table, including `ResourceChanges`, `ResourceContainerChanges`, `AppServiceResources` and `TagsResources`. Sending a Log Analytics table now points to `query_workspace`.
 - An unreadable `AZURE_QUERY_MCP_HUNTING_DIR` no longer stops the server from starting; it is reported in `list_hunting_queries` `loadErrors`.

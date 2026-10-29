@@ -24,6 +24,14 @@ Do not open a public issue for a suspected vulnerability. Use GitHub's private v
 - Retain Azure activity and sign-in logs, but do not log query results or access tokens.
 - Run `npm ci`, `npm run check`, and `npm audit --omit=dev` for every release.
 
+## Known dependency advisories
+
+**GHSA-xcx6-jx8p-x3h5 (`@azure/msal-node` 7.0.2 and earlier).** `@azure/identity` 4.14.0, the latest release, requires `@azure/msal-node` 6.x, and no fixed 6.x release exists. This repository's `overrides` entry moves its own development installs to 7.x, but npm ignores `overrides` in a published package, so `npx`, the Claude Code plugin and every other install from npm get 6.x and `npm audit` reports the advisory there.
+
+The advisory covers MSAL Node's authorization code flow. The server signs in only through `DefaultAzureCredential` and loads no identity plugins. In that chain, only the broker and Visual Studio Code credentials can start an interactive authorization code request, and both need a plugin (`@azure/identity-broker` or `@azure/identity-vscode`) that the server does not install or register, so they report themselves unavailable and are skipped. The affected flow is therefore not reachable through this server.
+
+A release will move installs to a fixed `@azure/msal-node` once `@azure/identity` accepts it.
+
 ## Trust boundaries and residual risks
 
 The server executes user-supplied read-only query text under the caller's Azure identity. Read-only access can still disclose sensitive resource metadata or log content. Log fields such as command lines, email subjects and alert descriptions can be attacker-controlled and are returned to the model as-is; treat them as untrusted data, and be careful which other tools share a session with this server. Query policy reduces accidental misuse but is not a substitute for least-privilege RBAC, network controls, data classification, and review of the connected MCP client.
